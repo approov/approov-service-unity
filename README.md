@@ -13,6 +13,8 @@ https://github.com/approov/approov-service-unity.git
 After installing the package:
 
 1. Import the `Shapes App` sample from the Package Manager if you want the demo content.
+   The sample scene is not shown directly under `Packages/io.approov.service.unity` because Unity hides `Samples~` in installed packages.
+   After import, open `Assets/Samples/Approov Unity Service Layer/<package-version>/Shapes App/Scenes/SampleScene.unity`.
 2. For iOS, install the native SDK through `Tools/Approov/Install iOS SDK` or `Tools/Approov/Approov Settings`.
 3. For Android, no manual `mainTemplate.gradle` or manifest edits are required. The packaged Android library resolves the Approov SDK and OkHttp from Maven automatically.
 
