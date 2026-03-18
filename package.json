@@ -1,6 +1,6 @@
 {
-  "name": "io.approov.service.unitywebrequest",
-  "displayName": "Approov Unity Service",
+  "name": "io.approov.service.unity",
+  "displayName": "Approov Unity Service Layer",
   "version": "0.1.0",
   "unity": "6000.0",
   "description": "Approov service layer for UnityWebRequest and HttpClient on Unity 6+.",

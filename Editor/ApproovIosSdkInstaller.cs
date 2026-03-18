@@ -230,7 +230,7 @@ namespace Approov.EditorTools
                 return;
             }
 
-            PackageInfo packageInfo = PackageInfo.FindForAssetPath("Packages/io.approov.service.unitywebrequest");
+            PackageInfo packageInfo = PackageInfo.FindForAssetPath("Packages/io.approov.service.unity");
             if (packageInfo == null)
             {
                 return;

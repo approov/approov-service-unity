@@ -1,6 +1,6 @@
 # Approov Unity Service
 
-`io.approov.service.unitywebrequest` is a Unity 6+ UPM package that adds Approov protection to both `UnityWebRequest` and `HttpClient`.
+`io.approov.service.unity` is a Unity 6+ UPM package that adds Approov protection to both `UnityWebRequest` and `HttpClient`.
 
 ## Install
 
@@ -64,7 +64,7 @@ Use `Tools/Approov/Approov Settings` to install the latest release, install a sp
 
 ## Repository Role
 
-This repository is the package-first home for the shared Approov Unity service layer. It replaces the old quickstart-style repo layout with a reusable package that can be consumed directly from GitHub.
+This repository is the package-first home for the shared Approov Unity service layer. It replaces the old quickstart-style repo layout with a reusable package that can be consumed directly from GitHub and used across the main Unity networking surfaces.
 
 ## Migration From The Old Quickstart
 

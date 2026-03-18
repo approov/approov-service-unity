@@ -4,7 +4,7 @@ The Shapes example is now distributed as a Package Manager sample.
 
 ## Use it
 
-1. Install `io.approov.service.unitywebrequest` from its Git URL.
+1. Install `io.approov.service.unity` from its Git URL.
 2. Import the `Shapes App` sample from the Package Manager.
 3. Open the imported sample scene.
 4. Set the Approov config string in the `ShapesApp` component.
