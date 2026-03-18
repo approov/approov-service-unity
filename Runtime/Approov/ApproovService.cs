@@ -24,38 +24,38 @@ namespace Approov
         // The config string used to initialize the SDK
         private static string sConfigStringUsed = null;
         /* Lock object: used during ApproovSDK init call */
-        protected static readonly object InitializerLock = new();
+        private static readonly object InitializerLock = new();
         // The log tag
         public static readonly string TAG = "ApproovService ";
         /* Status of Approov SDK initialisation */
-        protected static bool ApproovSDKInitialized = false;
+        private static bool ApproovSDKInitialized = false;
         /* Any header to be used for binding in Approov tokens or null if not set */
-        protected static string BindingHeader = null;
+        private static string BindingHeader = null;
         /* Lock object */
-        protected static readonly object BindingHeaderLock = new();
+        private static readonly object BindingHeaderLock = new();
         /* Approov token default header */
-        protected static string ApproovTokenHeader = "Approov-Token";
+        private static string ApproovTokenHeader = "Approov-Token";
         /* Approov token custom prefix: any prefix to be added such as "Bearer " */
-        protected static string ApproovTokenPrefix = "";
+        private static string ApproovTokenPrefix = "";
         /* Lock object for the above string variables */
-        protected static readonly object HeaderAndPrefixLock = new object();
+        private static readonly object HeaderAndPrefixLock = new object();
         /* true if the connection should proceed on network failures and not add an Approov token */
-        protected static bool ProceedOnNetworkFail = false;
+        private static bool ProceedOnNetworkFail = false;
         /* Lock object for the above boolean variable*/
-        protected static readonly object ProceedOnNetworkFailLock = new();
+        private static readonly object ProceedOnNetworkFailLock = new();
         /* map of headers that should have their values substituted for secure strings, mapped to their
             required prefixes */
-        protected static Dictionary<string, string> SubstitutionHeaders = new Dictionary<string, string>();
+        private static Dictionary<string, string> SubstitutionHeaders = new Dictionary<string, string>();
         /* Lock object for the above Set*/
-        protected static readonly object SubstitutionHeadersLock = new();
+        private static readonly object SubstitutionHeadersLock = new();
         /* set of URL regexs that should be excluded from any Approov protection */
-        protected static HashSet<Regex> ExclusionURLRegexs = new HashSet<Regex>();
+        private static HashSet<Regex> ExclusionURLRegexs = new HashSet<Regex>();
         /* Lock object for the above Set*/
-        protected static readonly object ExclusionURLRegexsLock = new();
+        private static readonly object ExclusionURLRegexsLock = new();
         /*  Set of query parameters that may be substituted, specified by the key name */
-        protected static HashSet<string> SubstitutionQueryParams = new HashSet<string>();
+        private static HashSet<string> SubstitutionQueryParams = new HashSet<string>();
         /* Lock object for the above Set*/
-        protected static readonly object SubstitutionQueryParamsLock = new();
+        private static readonly object SubstitutionQueryParamsLock = new();
 
 
         /*  
