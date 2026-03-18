@@ -230,7 +230,8 @@ namespace Approov.EditorTools
                 return;
             }
 
-            PackageInfo packageInfo = PackageInfo.FindForAssetPath("Packages/io.approov.service.unity");
+            UnityEditor.PackageManager.PackageInfo packageInfo =
+                UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/io.approov.service.unity");
             if (packageInfo == null)
             {
                 return;
