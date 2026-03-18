@@ -1,0 +1,20 @@
+apply plugin: 'com.android.library'
+
+android {
+    namespace "io.approov.unity.service"
+    compileSdkVersion 34
+
+    defaultConfig {
+        minSdkVersion 23
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+
+dependencies {
+    implementation "io.approov:approov-android-sdk:3.5.3"
+    implementation "com.squareup.okhttp3:okhttp:4.12.0"
+}

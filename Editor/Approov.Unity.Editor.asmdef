@@ -1,0 +1,18 @@
+{
+  "name": "Approov.Unity.Editor",
+  "rootNamespace": "Approov.EditorTools",
+  "references": [
+    "Approov.Unity.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -1,0 +1,24 @@
+{
+  "name": "io.approov.service.unitywebrequest",
+  "displayName": "Approov Unity Service",
+  "version": "0.1.0",
+  "unity": "6000.0",
+  "description": "Approov service layer for UnityWebRequest and HttpClient on Unity 6+.",
+  "keywords": [
+    "approov",
+    "unity",
+    "unitywebrequest",
+    "httpclient",
+    "security"
+  ],
+  "author": {
+    "name": "Approov"
+  },
+  "samples": [
+    {
+      "displayName": "Shapes App",
+      "description": "Sample scene showing ApproovWebRequest integration with the Shapes demo backend.",
+      "path": "Samples~/ShapesApp"
+    }
+  ]
+}
