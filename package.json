@@ -3,21 +3,35 @@
   "displayName": "Approov Unity Service Layer",
   "version": "0.1.0",
   "unity": "6000.0",
-  "description": "Approov service layer for UnityWebRequest and HttpClient on Unity 6+.",
+  "description": "Protect UnityWebRequest and HttpClient traffic on iOS and Android with Approov token injection, dynamic certificate pinning, secure string substitution, trace headers, and project-based configuration.",
+  "documentationUrl": "https://github.com/approov/approov-service-unity#readme",
+  "changelogUrl": "https://github.com/approov/approov-service-unity/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/approov/approov-service-unity/blob/main/LICENSE.md",
+  "dependencies": {},
   "keywords": [
     "approov",
     "unity",
     "unitywebrequest",
     "httpclient",
-    "security"
+    "security",
+    "mobile-security",
+    "api-protection",
+    "ios",
+    "android"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/approov/approov-service-unity.git"
+  },
+  "category": "Security",
   "author": {
-    "name": "Approov"
+    "name": "Approov",
+    "url": "https://approov.io"
   },
   "samples": [
     {
       "displayName": "Shapes App",
-      "description": "Sample scene showing ApproovWebRequest integration with the Shapes demo backend.",
+      "description": "Sample scene showing the recommended UnityWebRequest plus ApproovService.SendWebRequest integration against the Shapes demo backend.",
       "path": "Samples~/ShapesApp"
     }
   ]
