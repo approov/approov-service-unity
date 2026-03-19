@@ -89,7 +89,8 @@ public class ShapesApp : MonoBehaviour
 
         if (webRequest.result != UnityWebRequest.Result.Success)
         {
-            Debug.LogError(webRequest.error);
+            string responseBody = webRequest.downloadHandler?.text;
+            Debug.LogError("Request failed: " + webRequest.error + " Response: " + responseBody);
             // Set image to error
             shapesImage.sprite = Sprite.Create(images["confused"], new Rect(0, 0, images["confused"].width, images["confused"].height), new Vector2(0.5f, 0.5f));
             // Set text to error: check if return http code is 400
@@ -98,25 +99,34 @@ public class ShapesApp : MonoBehaviour
                 // This probabaly means there is a json error message with `status`, try to parse it
                 try
                 {
-                    var json = JsonUtility.FromJson<ShapesResponse>(webRequest.downloadHandler.text);
-                    statusText.text = "Error: " + json.status;
+                    ShapesResponse json = JsonUtility.FromJson<ShapesResponse>(responseBody);
+                    statusText.text = !string.IsNullOrWhiteSpace(json?.status)
+                        ? "Error: " + json.status
+                        : "Error: " + responseBody;
                 }
                 catch (Exception)
                 {
-                    statusText.text = "Error: " + webRequest.error;
+                    statusText.text = "Error: " + responseBody;
                 }
             }
             else
             {
-                statusText.text = "Error: " + webRequest.error;
+                statusText.text = "Error: " + (string.IsNullOrWhiteSpace(responseBody) ? webRequest.error : responseBody);
             }
         }
         else
         {
-            Debug.Log("Received: " + webRequest.downloadHandler.text);
+            string responseBody = webRequest.downloadHandler?.text;
+            Debug.Log("Received: " + responseBody);
             // This might be a succesfull call to shapes endpoint or hello endpoint
             // The hello endpoint returns a json with key `text` and a message
-            var json = JsonUtility.FromJson<ShapesResponse>(webRequest.downloadHandler.text);
+            ShapesResponse json = JsonUtility.FromJson<ShapesResponse>(responseBody);
+            if (json == null || string.IsNullOrWhiteSpace(json.status))
+            {
+                statusText.text = "Unexpected response: " + responseBody;
+                shapesImage.sprite = Sprite.Create(images["confused"], new Rect(0, 0, images["confused"].width, images["confused"].height), new Vector2(0.5f, 0.5f));
+                yield break;
+            }
             statusText.text = json.status;
             // If the message contains `Hello World!` then set the image to `hello.png`
             if (json.status.Contains("Hello"))

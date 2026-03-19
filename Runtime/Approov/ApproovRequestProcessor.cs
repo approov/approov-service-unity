@@ -55,8 +55,7 @@ namespace Approov
                 ApproovService.SetDataHashInToken(headerValue);
             }
 
-            string hostname = requestUri.Host;
-            ApproovTokenFetchResult approovResult = ApproovBridge.FetchApproovTokenAndWait(hostname);
+            ApproovTokenFetchResult approovResult = ApproovBridge.FetchApproovTokenAndWait(urlWithBaseAddress);
             if (approovResult.isConfigChanged)
             {
                 ApproovBridge.ClearCertificateCache();
@@ -69,6 +68,7 @@ namespace Approov
             }
 
             ApproovTokenFetchStatus status = approovResult.status;
+            Console.WriteLine("ApproovRequestProcessor FetchToken: " + urlWithBaseAddress + " " + ApproovService.ApproovTokenFetchStatusToString(status));
             if (status == ApproovTokenFetchStatus.Success)
             {
                 setHeader(ApproovService.GetTokenHeader(), ApproovService.GetTokenPrefix() + approovResult.token);
