@@ -115,6 +115,17 @@ namespace Approov
                 sConfigStringUsed = config;
                 // Update the status
                 ApproovSDKInitialized = true;
+
+                Debug.Log(TAG + "Approov successfully initialized");
+                string deviceID = GetDeviceID();
+                if (string.IsNullOrWhiteSpace(deviceID))
+                {
+                    Debug.LogWarning(TAG + "Unable to read the Approov device ID after initialization.");
+                }
+                else
+                {
+                    Debug.Log(TAG + "Approov device ID: " + deviceID);
+                }
             }  
         }// Initialize method
 
