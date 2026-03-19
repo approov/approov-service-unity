@@ -41,21 +41,21 @@ namespace Approov.EditorTools
                 return;
             }
 
-            Directory.CreateDirectory(RuntimeAssetDirectory);
-            File.WriteAllText(RuntimeAssetPath, normalizedConfig);
-            AssetDatabase.ImportAsset(RuntimeAssetPath, ImportAssetOptions.ForceSynchronousImport);
+            Directory.CreateDirectory(ApproovProjectConfigState.RuntimeAssetDirectory);
+            File.WriteAllText(ApproovProjectConfigState.RuntimeAssetPath, normalizedConfig);
+            AssetDatabase.ImportAsset(ApproovProjectConfigState.RuntimeAssetPath, ImportAssetOptions.ForceSynchronousImport);
         }
 
         private static void DeleteRuntimeAsset()
         {
-            if (File.Exists(RuntimeAssetPath))
+            if (File.Exists(ApproovProjectConfigState.RuntimeAssetPath))
             {
-                FileUtil.DeleteFileOrDirectory(RuntimeAssetPath);
+                FileUtil.DeleteFileOrDirectory(ApproovProjectConfigState.RuntimeAssetPath);
             }
 
-            if (File.Exists(RuntimeAssetPath + ".meta"))
+            if (File.Exists(ApproovProjectConfigState.RuntimeAssetPath + ".meta"))
             {
-                FileUtil.DeleteFileOrDirectory(RuntimeAssetPath + ".meta");
+                FileUtil.DeleteFileOrDirectory(ApproovProjectConfigState.RuntimeAssetPath + ".meta");
             }
 
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
