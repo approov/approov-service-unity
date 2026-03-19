@@ -11,6 +11,7 @@ The supported public API for this package is the high-level Unity surface:
 
 Use `ApproovService` to initialize the SDK and configure request behavior:
 
+- `Initialize()` reads the config string from project settings
 - `Initialize(string config)`
 - `IsSDKInitialized()`
 - `SetBindingHeader(string header)` / `GetBindingHeader()`

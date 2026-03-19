@@ -15,7 +15,6 @@ public class ShapesApp : MonoBehaviour
     // The image UI control to display the image
     public Image shapesImage;
     // The API endpoint version: v1 unprotected (Api-Key header is required), v2 (Api-Key header protected)  and v3 protected by Approov token
-    [SerializeField] private string approovConfig = "<enter-your-config-string-here>";
     [SerializeField] private bool useApproov;
     static readonly string apiVersion = "v1";
     // The hello endpoint
@@ -35,9 +34,20 @@ public class ShapesApp : MonoBehaviour
         if (!LoadImageResources()) throw new Exception("Failed to load images");
         // Set default image at startup: "approov.png" from dictionary
         shapesImage.sprite = Sprite.Create(images["approov"], new Rect(0, 0, images["approov"].width, images["approov"].height), new Vector2(0.5f, 0.5f));
-        if (useApproov && !string.IsNullOrWhiteSpace(approovConfig) && !approovConfig.Contains("<enter-your-config-string-here>"))
+        if (useApproov)
         {
-            ApproovService.Initialize(approovConfig);
+            try
+            {
+                ApproovService.Initialize();
+            }
+            catch (ConfigurationFailureException exception)
+            {
+                Debug.LogWarning(exception.Message);
+            }
+            catch (InitializationFailureException exception)
+            {
+                Debug.LogError(exception.Message);
+            }
         }
     }
 

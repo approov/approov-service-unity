@@ -64,7 +64,17 @@ namespace Approov
         *   @param config string with the configuration
         *
         */
+        public static void Initialize()
+        {
+            Initialize(ApproovProjectConfig.GetConfigString());
+        }
+
         public static void Initialize(string config){
+            if (string.IsNullOrWhiteSpace(config))
+            {
+                throw new ConfigurationFailureException(TAG + "Approov config string is missing. Open Tools/Approov/Approov Settings and paste the output of `approov sdk -getConfigString`.");
+            }
+
             lock (InitializerLock)
             {
                 // Check if attempting to use a different config string
@@ -75,27 +85,47 @@ namespace Approov
                         {
                             throw new ConfigurationFailureException(TAG + "Error: SDK already initialized");
                         }
-                } else {
-                    // Initialize the SDK
-                    #if UNITY_ANDROID
-                    ApproovBridge.Initialize(config);
-                    #elif UNITY_IOS
-                    // iOS
-                    bool statusInit = ApproovBridge.Initialize(config, "auto", null, out var e);
-                    if (!statusInit)
-                    {
-                        throw new InitializationFailureException(TAG + "Error SDK initialization failed", false);
-                    } 
-                    #endif
-                    // Set user property to id the service
-                    SetUserProperty("approov-service-unity");
-                    // Sotre the config string used
-                    sConfigStringUsed = config;
-                    // Update the status
-                    ApproovSDKInitialized = true;
+
+                    return;
                 }
+
+                if (!IsNativeInitializationSupported())
+                {
+                    Debug.LogWarning(TAG + "Approov native initialization is only available on iOS and Android. The config string is stored in project settings, but Approov will remain disabled in this editor or desktop session.");
+                    return;
+                }
+
+                // Initialize the SDK
+#if UNITY_ANDROID
+                ApproovBridge.Initialize(config);
+#elif UNITY_IOS
+                // iOS
+                bool statusInit = ApproovBridge.Initialize(config, "auto", null, out _);
+                if (!statusInit)
+                {
+                    throw new InitializationFailureException(TAG + "Error SDK initialization failed", false);
+                }
+#else
+                Debug.LogWarning(TAG + "Approov native initialization is not available on this platform.");
+                return;
+#endif
+                // Set user property to id the service
+                SetUserProperty("approov-service-unity");
+                // Sotre the config string used
+                sConfigStringUsed = config;
+                // Update the status
+                ApproovSDKInitialized = true;
             }  
         }// Initialize method
+
+        private static bool IsNativeInitializationSupported()
+        {
+#if UNITY_ANDROID || UNITY_IOS
+            return Application.platform == RuntimePlatform.Android || Application.platform == RuntimePlatform.IPhonePlayer;
+#else
+            return false;
+#endif
+        }
         
         /*  Get initialization status of SDK
         *   @param true if the SDK is initialized
