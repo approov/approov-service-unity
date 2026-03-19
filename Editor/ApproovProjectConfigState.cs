@@ -9,8 +9,8 @@ namespace Approov.EditorTools
     [FilePath("ProjectSettings/ApproovProjectConfigState.asset", FilePathAttribute.Location.ProjectFolder)]
     internal sealed class ApproovProjectConfigState : ScriptableSingleton<ApproovProjectConfigState>
     {
-        private const string RuntimeAssetPath = "Assets/Resources/Approov/ApproovConfig.txt";
-        private const string RuntimeAssetDirectory = "Assets/Resources/Approov";
+        internal const string RuntimeAssetPath = "Assets/Resources/Approov/ApproovConfig.txt";
+        internal const string RuntimeAssetDirectory = "Assets/Resources/Approov";
 
         [SerializeField] private string approovConfigString = string.Empty;
 
