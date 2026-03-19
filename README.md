@@ -33,9 +33,15 @@ The parameterless initializer reads the config string from project settings. Nat
 
 ```csharp
 using Approov;
+using UnityEngine.Networking;
 
-ApproovWebRequest request = ApproovWebRequest.Get("https://approov.io");
+UnityWebRequest request = UnityWebRequest.Get("https://approov.io");
+yield return ApproovService.SendWebRequest(request);
 ```
+
+Use `ApproovService.SendWebRequest(...)` as the primary UnityWebRequest integration surface. It applies request mutation, token injection, secure-string substitution, and Approov certificate validation before dispatch.
+
+`ApproovWebRequest` remains available for compatibility, but it should not be the primary documented path because Unity method hiding can bypass Approov processing if the instance is handled through a `UnityWebRequest` reference.
 
 ## Use With HttpClient
 

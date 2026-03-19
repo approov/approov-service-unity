@@ -1,6 +1,6 @@
 # Shapes App Sample
 
-This sample demonstrates `ApproovWebRequest` against the Shapes demo backend.
+This sample demonstrates the recommended `UnityWebRequest` integration using `ApproovService.SendWebRequest(...)` against the Shapes demo backend.
 
 ## Setup
 

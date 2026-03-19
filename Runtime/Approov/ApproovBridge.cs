@@ -12,6 +12,7 @@ namespace Approov
         public string ARC;
         public bool isForceApplyPins;
         public string token;
+        public string traceID;
         public string rejectionReasons;
         public bool isConfigChanged;
         public string secureString;
@@ -23,9 +24,11 @@ namespace Approov
     internal sealed class ApproovTokenFetchResultPayload
     {
         public int status;
+        public string statusString;
         public string ARC;
         public bool isForceApplyPins;
         public string token;
+        public string traceID;
         public string rejectionReasons;
         public bool isConfigChanged;
         public string secureString;
@@ -87,16 +90,63 @@ namespace Approov
 
             return new ApproovTokenFetchResult
             {
-                status = ConvertTokenFetchStatus(payload.status),
+                status = ConvertTokenFetchStatus(payload.statusString, payload.status),
                 ARC = payload.ARC,
                 isForceApplyPins = payload.isForceApplyPins,
                 token = payload.token,
+                traceID = payload.traceID,
                 rejectionReasons = payload.rejectionReasons,
                 isConfigChanged = payload.isConfigChanged,
                 secureString = payload.secureString,
                 measurementConfig = measurementConfig,
                 loggableToken = payload.loggableToken,
             };
+        }
+
+        private static ApproovTokenFetchStatus ConvertTokenFetchStatus(string statusString, int status)
+        {
+            if (!string.IsNullOrWhiteSpace(statusString))
+            {
+                switch (statusString.Trim().ToUpperInvariant())
+                {
+                    case "SUCCESS":
+                        return ApproovTokenFetchStatus.Success;
+                    case "NO_NETWORK":
+                        return ApproovTokenFetchStatus.NoNetwork;
+                    case "MITM_DETECTED":
+                        return ApproovTokenFetchStatus.MITMDetected;
+                    case "POOR_NETWORK":
+                        return ApproovTokenFetchStatus.PoorNetwork;
+                    case "NO_APPROOV_SERVICE":
+                        return ApproovTokenFetchStatus.NoApproovService;
+                    case "BAD_URL":
+                        return ApproovTokenFetchStatus.BadURL;
+                    case "UNKNOWN_URL":
+                        return ApproovTokenFetchStatus.UnknownURL;
+                    case "UNPROTECTED_URL":
+                        return ApproovTokenFetchStatus.UnprotectedURL;
+                    case "NOT_INITIALIZED":
+                        return ApproovTokenFetchStatus.NotInitialized;
+                    case "NO_NETWORK_PERMISSION":
+                        return ApproovTokenFetchStatus.NoNetworkPermission;
+                    case "MISSING_LIB_DEPENDENCY":
+                        return ApproovTokenFetchStatus.MissingLibDependency;
+                    case "INTERNAL_ERROR":
+                        return ApproovTokenFetchStatus.InternalError;
+                    case "REJECTED":
+                        return ApproovTokenFetchStatus.Rejected;
+                    case "DISABLED":
+                        return ApproovTokenFetchStatus.Disabled;
+                    case "UNKNOWN_KEY":
+                        return ApproovTokenFetchStatus.UnknownKey;
+                    case "BAD_KEY":
+                        return ApproovTokenFetchStatus.BadKey;
+                    case "BAD_PAYLOAD":
+                        return ApproovTokenFetchStatus.BadPayload;
+                }
+            }
+
+            return ConvertTokenFetchStatus(status);
         }
 
         private static ApproovTokenFetchStatus ConvertTokenFetchStatus(int status)

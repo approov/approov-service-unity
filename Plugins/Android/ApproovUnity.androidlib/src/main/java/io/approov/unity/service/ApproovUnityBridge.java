@@ -156,9 +156,11 @@ public final class ApproovUnityBridge {
         JSONObject json = new JSONObject();
         try {
             json.put("status", result.getStatus().ordinal());
+            json.put("statusString", result.getStatus().toString());
             json.put("ARC", result.getARC());
             json.put("isForceApplyPins", result.isForceApplyPins());
             json.put("token", result.getToken());
+            json.put("traceID", result.getTraceID());
             json.put("rejectionReasons", result.getRejectionReasons());
             json.put("isConfigChanged", result.isConfigChanged());
             json.put("secureString", result.getSecureString());

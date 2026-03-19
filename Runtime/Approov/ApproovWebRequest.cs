@@ -110,13 +110,7 @@ namespace Approov
 
         public new UnityWebRequestAsyncOperation SendWebRequest()
         {
-            ApproovRequestProcessor.ApplyToUnityWebRequest(this);
-            if (this.downloadHandler == null)
-            {
-                this.downloadHandler = new DownloadHandlerBuffer();
-            }
-
-            return base.SendWebRequest();
+            return ApproovService.SendWebRequest(this);
         }
     }
 }

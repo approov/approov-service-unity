@@ -79,13 +79,13 @@ public class ShapesApp : MonoBehaviour
     IEnumerator MakeGetRequest(string uri)
     {
         Console.WriteLine("Making request to: " + uri);
-        UnityWebRequest webRequest = useApproov && ApproovService.IsSDKInitialized()
-            ? ApproovWebRequest.Get(uri)
-            : UnityWebRequest.Get(uri);
+        UnityWebRequest webRequest = UnityWebRequest.Get(uri);
         // Add the Api-Key header with the corresponding value
         webRequest.SetRequestHeader("Api-Key", ApiKey);
         // Request and wait for the desired page.
-        yield return webRequest.SendWebRequest();
+        yield return useApproov && ApproovService.IsSDKInitialized()
+            ? ApproovService.SendWebRequest(webRequest)
+            : webRequest.SendWebRequest();
 
         if (webRequest.result != UnityWebRequest.Result.Success)
         {

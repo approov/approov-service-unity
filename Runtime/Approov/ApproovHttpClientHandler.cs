@@ -18,6 +18,7 @@ namespace Approov
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            ApproovService.LogTrace("ApproovHttpClientHandler SendAsync start method=" + request.Method + " url=" + request.RequestUri);
             ApproovRequestProcessor.ApplyToHttpRequestMessage(request);
             return base.SendAsync(request, cancellationToken);
         }
@@ -41,16 +42,19 @@ namespace Approov
         {
             if (!ApproovService.IsSDKInitialized())
             {
+                ApproovService.LogTrace("ApproovHttpClientHandler ValidateServerCertificate using platform TLS validation because SDK is not initialized");
                 return sslPolicyErrors == SslPolicyErrors.None;
             }
 
             if (certificate == null || requestMessage?.RequestUri == null)
             {
+                ApproovService.LogTrace("ApproovHttpClientHandler ValidateServerCertificate missing certificate or request URI");
                 return false;
             }
 
 #if UNITY_ANDROID || UNITY_IOS
             string result = ApproovBridge.ShouldProceedWithNetworkConnection(certificate.RawData, requestMessage.RequestUri.Host, ApproovBridge.kPinTypePublicKeySha256);
+            ApproovService.LogTrace("ApproovHttpClientHandler ValidateServerCertificate host=" + requestMessage.RequestUri.Host + " result=" + (result ?? "ALLOW"));
             return result == null;
 #else
             return sslPolicyErrors == SslPolicyErrors.None;

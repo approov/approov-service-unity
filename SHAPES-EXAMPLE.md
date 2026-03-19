@@ -13,3 +13,10 @@ The Shapes example is now distributed as a Package Manager sample.
 Unity hides `Samples~` inside the installed package, so the sample scene will not appear directly under `Packages/io.approov.service.unity`.
 
 The sample now uses the package runtime directly and no longer relies on the legacy copy-`Assets` quickstart flow.
+
+For `UnityWebRequest` integrations, the recommended pattern is now:
+
+```csharp
+UnityWebRequest request = UnityWebRequest.Get(url);
+yield return ApproovService.SendWebRequest(request);
+```

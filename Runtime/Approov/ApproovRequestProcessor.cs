@@ -2,12 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.RegularExpressions;
+using UnityEngine.Networking;
 
 namespace Approov
 {
     internal static class ApproovRequestProcessor
     {
-        public static void ApplyToUnityWebRequest(ApproovWebRequest request)
+        public static void ApplyToUnityWebRequest(UnityWebRequest request)
         {
             Apply(
                 request.uri ?? new Uri(request.url),
@@ -38,8 +39,10 @@ namespace Approov
             }
 
             string urlWithBaseAddress = requestUri.AbsoluteUri;
+            ApproovService.LogTrace("ApproovRequestProcessor Apply start url=" + urlWithBaseAddress);
             if (ApproovService.CheckURLIsExcluded(urlWithBaseAddress))
             {
+                ApproovService.LogTrace("ApproovRequestProcessor URL excluded from protection");
                 return;
             }
 
@@ -52,18 +55,25 @@ namespace Approov
                     throw new ConfigurationFailureException("ApproovRequestProcessor Missing token binding header: " + bindingHeader);
                 }
 
+                ApproovService.LogTrace("ApproovRequestProcessor Binding header present: " + bindingHeader + " valueLength=" + headerValue.Length);
                 ApproovService.SetDataHashInToken(headerValue);
+            }
+            else
+            {
+                ApproovService.LogTrace("ApproovRequestProcessor No binding header configured");
             }
 
             ApproovTokenFetchResult approovResult = ApproovBridge.FetchApproovTokenAndWait(urlWithBaseAddress);
             if (approovResult.isConfigChanged)
             {
+                ApproovService.LogTrace("ApproovRequestProcessor SDK configuration changed, clearing pin cache and fetching latest config");
                 ApproovBridge.ClearCertificateCache();
                 ApproovService.FetchConfig();
             }
 
             if (approovResult.isForceApplyPins)
             {
+                ApproovService.LogTrace("ApproovRequestProcessor ForceApplyPins requested by SDK");
                 throw new NetworkingErrorException("ApproovRequestProcessor Forced pin update required");
             }
 
@@ -71,10 +81,26 @@ namespace Approov
             Console.WriteLine("ApproovRequestProcessor FetchToken: " + urlWithBaseAddress + " " + ApproovService.ApproovTokenFetchStatusToString(status));
             if (status == ApproovTokenFetchStatus.Success)
             {
-                setHeader(ApproovService.GetTokenHeader(), ApproovService.GetTokenPrefix() + approovResult.token);
+                if (!string.IsNullOrEmpty(approovResult.token))
+                {
+                    setHeader(ApproovService.GetTokenHeader(), ApproovService.GetTokenPrefix() + approovResult.token);
+                    ApproovService.LogTrace("ApproovRequestProcessor Added token header " + ApproovService.GetTokenHeader());
+                }
+                else
+                {
+                    ApproovService.LogTrace("ApproovRequestProcessor Token fetch succeeded without a token payload");
+                }
+
+                string traceIDHeader = ApproovService.GetApproovTraceIDHeader();
+                if (!string.IsNullOrWhiteSpace(traceIDHeader) && !string.IsNullOrWhiteSpace(approovResult.traceID))
+                {
+                    setHeader(traceIDHeader, approovResult.traceID);
+                    ApproovService.LogTrace("ApproovRequestProcessor Added trace header " + traceIDHeader);
+                }
             }
             else if (status == ApproovTokenFetchStatus.NoNetwork || status == ApproovTokenFetchStatus.PoorNetwork || status == ApproovTokenFetchStatus.MITMDetected)
             {
+                ApproovService.LogTrace("ApproovRequestProcessor Token fetch hit transient status " + ApproovService.ApproovTokenFetchStatusToString(status) + ", proceedOnNetworkFailure=" + ApproovService.GetProceedOnNetworkFailure());
                 if (!ApproovService.GetProceedOnNetworkFailure())
                 {
                     throw new NetworkingErrorException("ApproovRequestProcessor Retry attempt needed. " + approovResult.loggableToken, true);
@@ -89,6 +115,7 @@ namespace Approov
 
             if (status != ApproovTokenFetchStatus.Success && status != ApproovTokenFetchStatus.UnprotectedURL)
             {
+                ApproovService.LogTrace("ApproovRequestProcessor Skipping substitutions because token status was " + ApproovService.ApproovTokenFetchStatusToString(status));
                 return;
             }
 
@@ -107,6 +134,7 @@ namespace Approov
                 }
 
                 string secureStringKey = headerValue.Substring(prefix.Length);
+                ApproovService.LogTrace("ApproovRequestProcessor Substituting header " + substitutionHeader.Key + " using secure string key");
                 ApproovTokenFetchResult secureStringResult = ApproovBridge.FetchSecureStringAndWait(secureStringKey, null);
                 if (secureStringResult.status == ApproovTokenFetchStatus.Success)
                 {
@@ -116,6 +144,7 @@ namespace Approov
                     }
 
                     setHeader(substitutionHeader.Key, prefix + secureStringResult.secureString);
+                    ApproovService.LogTrace("ApproovRequestProcessor Substituted header " + substitutionHeader.Key);
                 }
                 else if (secureStringResult.status == ApproovTokenFetchStatus.Rejected)
                 {
@@ -145,6 +174,7 @@ namespace Approov
                     continue;
                 }
 
+                ApproovService.LogTrace("ApproovRequestProcessor Substituting query parameter " + queryParameter);
                 updatedUrl = regex.Replace(updatedUrl, match =>
                 {
                     string secureStringKey = match.Groups[2].Value;
@@ -156,7 +186,7 @@ namespace Approov
                             throw new ApproovException("ApproovRequestProcessor Query substitution returned null secure string");
                         }
 
-                        return match.Groups[1].Value + secureStringResult.secureString;
+                        return match.Groups[1].Value + Uri.EscapeDataString(secureStringResult.secureString);
                     }
 
                     if (secureStringResult.status == ApproovTokenFetchStatus.Rejected)
@@ -185,7 +215,10 @@ namespace Approov
             if (!string.Equals(updatedUrl, urlWithBaseAddress, StringComparison.Ordinal))
             {
                 setUri(new Uri(updatedUrl));
+                ApproovService.LogTrace("ApproovRequestProcessor Updated request URL after query substitutions");
             }
+
+            ApproovService.LogTrace("ApproovRequestProcessor Apply complete");
         }
 
         private static string GetHttpHeader(HttpRequestMessage request, string header)

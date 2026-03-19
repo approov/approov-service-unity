@@ -178,8 +178,13 @@ void Approov_emptyGlobalCacheDictionary() {
 // Convert the ApproovTokenFetchResult to a dictionary<NSString*,NSObject*>
 // and then to a JSON string to be returned to C#
 char* Approov_convertApproovTokenFetchResultToJSON(ApproovTokenFetchResult *result) {
-    // Check if result.secureString is nil and insert an empty string if it is
+    NSObject *statusStringObject = [Approov stringFromApproovTokenFetchStatus:result.status];
+    NSObject *tokenObject = result.token ? result.token : [NSNull null];
     NSObject *secureStringObject = result.secureString ? result.secureString : [NSNull null];
+    NSObject *traceIDObject = result.traceID ? result.traceID : [NSNull null];
+    NSObject *arcObject = result.ARC ? result.ARC : [NSNull null];
+    NSObject *rejectionReasonsObject = result.rejectionReasons ? result.rejectionReasons : [NSNull null];
+    NSObject *loggableTokenObject = result.loggableToken ? result.loggableToken : [NSNull null];
     
     NSArray *measurementConfigArray = nil;
     if (result.measurementConfig) {
@@ -196,13 +201,15 @@ char* Approov_convertApproovTokenFetchResultToJSON(ApproovTokenFetchResult *resu
     // Convert the ApproovTokenFetchResult to a dictionary<NSString*,NSObject*>
     NSMutableDictionary<NSString*,NSObject*> *dict = [NSMutableDictionary dictionary];
     [dict setObject:@(result.status) forKey:@"status"];
-    [dict setObject:result.token forKey:@"token"];
+    [dict setObject:statusStringObject forKey:@"statusString"];
+    [dict setObject:tokenObject forKey:@"token"];
     [dict setObject:secureStringObject forKey:@"secureString"];
-    [dict setObject:result.ARC forKey:@"ARC"];
-    [dict setObject:result.rejectionReasons forKey:@"rejectionReasons"];
+    [dict setObject:traceIDObject forKey:@"traceID"];
+    [dict setObject:arcObject forKey:@"ARC"];
+    [dict setObject:rejectionReasonsObject forKey:@"rejectionReasons"];
     [dict setObject:@(result.isConfigChanged) forKey:@"isConfigChanged"];
     [dict setObject:@(result.isForceApplyPins) forKey:@"isForceApplyPins"];
-    [dict setObject:result.loggableToken forKey:@"loggableToken"];
+    [dict setObject:loggableTokenObject forKey:@"loggableToken"];
     
     if(measurementConfigArray) {
         [dict setObject:measurementConfigArray forKey:@"measurementConfig"];

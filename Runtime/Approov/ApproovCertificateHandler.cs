@@ -7,9 +7,9 @@ namespace Approov
     public class ApproovCertificateHandler : CertificateHandler
     {
         private static readonly string TAG = "ApproovCertificateHandler ";
-        private ApproovWebRequest approovWebRequest = null;
+        private UnityWebRequest approovWebRequest = null;
 
-        public ApproovCertificateHandler(ApproovWebRequest request)
+        public ApproovCertificateHandler(UnityWebRequest request)
         {
             this.approovWebRequest = request;
         }
@@ -19,17 +19,17 @@ namespace Approov
             // Extract the hostname from the URL
             Uri uri = new Uri(approovWebRequest.url);
             string hostname = uri.Host;
-            Debug.Log(TAG + "ApproovCertificateHandler.ValidateCertificate: validating certificate for " + hostname);
+            ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: validating certificate for " + hostname);
             // Call bridging layer versions
             string result = ApproovBridge.ShouldProceedWithNetworkConnection(certificateData, hostname, ApproovBridge.kPinTypePublicKeySha256);
             // The bridging layer processes the return result from the native layer and returns null if the connection should be allowed
             if (result == null)
             {
-                Debug.Log(TAG + "ApproovCertificateHandler.ValidateCertificate: will ALLOW connection to " + approovWebRequest.url);
+                ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: will ALLOW connection to " + approovWebRequest.url);
                 return true;
             }
             // Pr returns an eeror message if the connection should be denied
-            Debug.Log(TAG + "ApproovCertificateHandler.ValidateCertificate: will DENY connection to " + approovWebRequest.url + " with error: " + result);
+            ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: will DENY connection to " + approovWebRequest.url + " with error: " + result);
             return false;
         }
     }
