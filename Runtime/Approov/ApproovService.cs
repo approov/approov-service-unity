@@ -127,14 +127,16 @@ namespace Approov
                 Debug.LogWarning(TAG + "Approov native initialization is not available on this platform.");
                 return;
 #endif
-                // Set user property to id the service
-                SetUserProperty("approov-service-unity");
+                // Set a default user property so Approov logs can identify the service layer and app.
+                string defaultUserProperty = BuildDefaultUserProperty();
+                SetUserProperty(defaultUserProperty);
                 // Sotre the config string used
                 sConfigStringUsed = config;
                 // Update the status
                 ApproovSDKInitialized = true;
 
                 Debug.Log(TAG + "Approov successfully initialized");
+                Debug.Log(TAG + "Approov user property: " + defaultUserProperty);
                 string deviceID = GetDeviceID();
                 if (string.IsNullOrWhiteSpace(deviceID))
                 {
@@ -596,7 +598,37 @@ namespace Approov
         * @param property to be set, which may be null
         */
         public static void SetUserProperty(string property)  {
+            LogTrace(TAG + "SetUserProperty " + property);
             ApproovBridge.SetUserProperty(property);
+        }
+
+        private static string BuildDefaultUserProperty()
+        {
+            string packageVersion = ApproovProjectConfig.GetPackageVersion();
+            string appName = Application.productName;
+            if (string.IsNullOrWhiteSpace(appName))
+            {
+                appName = Application.identifier;
+            }
+
+            if (string.IsNullOrWhiteSpace(appName))
+            {
+                appName = "unknown-app";
+            }
+
+            string prefix = "approov-service-unity:" + packageVersion + ", ";
+            int remainingLength = 128 - prefix.Length;
+            if (remainingLength <= 0)
+            {
+                return prefix.Substring(0, 128);
+            }
+
+            if (appName.Length > remainingLength)
+            {
+                appName = appName.Substring(0, remainingLength);
+            }
+
+            return prefix + appName;
         }
 
         #if UNITY_ANDROID

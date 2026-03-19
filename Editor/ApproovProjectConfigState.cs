@@ -10,6 +10,7 @@ namespace Approov.EditorTools
     internal sealed class ApproovProjectConfigState : ScriptableSingleton<ApproovProjectConfigState>
     {
         internal const string RuntimeAssetPath = "Assets/Resources/Approov/ApproovConfig.txt";
+        internal const string VersionRuntimeAssetPath = "Assets/Resources/Approov/ApproovPackageVersion.txt";
         internal const string RuntimeAssetDirectory = "Assets/Resources/Approov";
 
         [SerializeField] private string approovConfigString = string.Empty;
@@ -24,16 +25,27 @@ namespace Approov.EditorTools
 
         public void SaveState()
         {
-            ApproovProjectConfigSync.SyncRuntimeAsset(approovConfigString);
+            ApproovProjectConfigSync.SyncRuntimeAssets(approovConfigString);
             Save(true);
         }
     }
 
     internal static class ApproovProjectConfigSync
     {
-        public static void SyncRuntimeAsset(string configString)
+        [InitializeOnLoadMethod]
+        private static void SyncOnLoad()
+        {
+            SyncRuntimeAssets(ApproovProjectConfigState.instance.ConfigString);
+        }
+
+        public static void SyncRuntimeAssets(string configString)
         {
             string normalizedConfig = string.IsNullOrWhiteSpace(configString) ? string.Empty : configString.Trim();
+            string packageVersion = GetInstalledPackageVersion();
+
+            Directory.CreateDirectory(ApproovProjectConfigState.RuntimeAssetDirectory);
+            File.WriteAllText(ApproovProjectConfigState.VersionRuntimeAssetPath, packageVersion);
+            AssetDatabase.ImportAsset(ApproovProjectConfigState.VersionRuntimeAssetPath, ImportAssetOptions.ForceSynchronousImport);
 
             if (string.IsNullOrEmpty(normalizedConfig))
             {
@@ -41,9 +53,15 @@ namespace Approov.EditorTools
                 return;
             }
 
-            Directory.CreateDirectory(ApproovProjectConfigState.RuntimeAssetDirectory);
             File.WriteAllText(ApproovProjectConfigState.RuntimeAssetPath, normalizedConfig);
             AssetDatabase.ImportAsset(ApproovProjectConfigState.RuntimeAssetPath, ImportAssetOptions.ForceSynchronousImport);
+        }
+
+        private static string GetInstalledPackageVersion()
+        {
+            UnityEditor.PackageManager.PackageInfo packageInfo =
+                UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(ApproovProjectConfigState).Assembly);
+            return string.IsNullOrWhiteSpace(packageInfo?.version) ? "unknown" : packageInfo.version.Trim();
         }
 
         private static void DeleteRuntimeAsset()
