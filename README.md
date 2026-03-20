@@ -18,6 +18,7 @@ After installing the package:
 2. Open `Tools/Approov/Approov Settings` and paste the config string from `approov sdk -getConfigString`.
    Use the same window to install the native iOS SDK if you are targeting iOS.
 3. For Android, no manual `mainTemplate.gradle` or manifest edits are required. The packaged Android library resolves the Approov SDK and OkHttp from Maven automatically.
+   The Android project minimum API level must be set to 23 or higher.
 
 ## Initialize
 
@@ -89,5 +90,5 @@ The old flow asked users to copy `Assets/` into their project and manually fetch
 ## Platform Notes
 
 - Unity 6+ only
-- Android min SDK defaults to 23 through the packaged Android library
+- Android builds require project min SDK 23 or higher
 - iOS uses `Approov.xcframework`

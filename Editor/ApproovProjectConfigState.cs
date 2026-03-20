@@ -1,5 +1,6 @@
 using System.IO;
 using UnityEditor;
+using UnityEditor.Android;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
@@ -35,6 +36,7 @@ namespace Approov.EditorTools
         [InitializeOnLoadMethod]
         private static void SyncOnLoad()
         {
+            // Keep the runtime metadata assets aligned with the installed package state on editor load/import.
             SyncRuntimeAssets(ApproovProjectConfigState.instance.ConfigString);
         }
 
@@ -43,6 +45,8 @@ namespace Approov.EditorTools
             string normalizedConfig = string.IsNullOrWhiteSpace(configString) ? string.Empty : configString.Trim();
             string packageVersion = GetInstalledPackageVersion();
 
+            // Runtime code cannot reliably read package.json from the installed UPM package on device builds,
+            // so we mirror the package version into a Resources asset during editor time.
             Directory.CreateDirectory(ApproovProjectConfigState.RuntimeAssetDirectory);
             File.WriteAllText(ApproovProjectConfigState.VersionRuntimeAssetPath, packageVersion);
             AssetDatabase.ImportAsset(ApproovProjectConfigState.VersionRuntimeAssetPath, ImportAssetOptions.ForceSynchronousImport);
@@ -86,7 +90,23 @@ namespace Approov.EditorTools
 
         public void OnPreprocessBuild(BuildReport report)
         {
+            ValidateAndroidMinSdk(report);
             ApproovProjectConfigState.instance.SaveState();
+        }
+
+        private static void ValidateAndroidMinSdk(BuildReport report)
+        {
+            if (report.summary.platform != BuildTarget.Android)
+            {
+                return;
+            }
+
+            if (PlayerSettings.Android.minSdkVersion < AndroidSdkVersions.AndroidApiLevel23)
+            {
+                throw new BuildFailedException(
+                    "Approov Unity Service Layer requires Android minSdkVersion 23 or higher. " +
+                    "Update Project Settings > Player > Android > Minimum API Level before building.");
+            }
         }
     }
 }

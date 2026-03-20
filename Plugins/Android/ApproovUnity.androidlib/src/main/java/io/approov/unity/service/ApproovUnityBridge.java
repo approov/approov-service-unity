@@ -1,11 +1,11 @@
 package io.approov.unity.service;
 
 import android.app.Activity;
+import android.app.Application;
 import android.content.Context;
 import android.util.Base64;
 
 import com.criticalblue.approovsdk.Approov;
-import com.unity3d.player.UnityPlayer;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -41,8 +41,10 @@ public final class ApproovUnityBridge {
     }
 
     public static void initialize(String config) {
-        Activity activity = UnityPlayer.currentActivity;
-        Context applicationContext = activity.getApplicationContext();
+        Context applicationContext = getApplicationContext();
+        if (applicationContext == null) {
+            throw new IllegalStateException("Unable to resolve an Android application context for Approov initialization");
+        }
         Approov.initialize(applicationContext, config, "auto", null);
     }
 
@@ -72,6 +74,41 @@ public final class ApproovUnityBridge {
 
     public static void setActivity(Activity activity) {
         Approov.setActivity(activity);
+    }
+
+    private static Context getApplicationContext() {
+        Activity activity = getCurrentUnityActivity();
+        if (activity != null) {
+            return activity.getApplicationContext();
+        }
+
+        try {
+            // Avoid a hard compile-time dependency on UnityPlayer so the Android library can compile
+            // cleanly in generated Gradle projects where that class is not on this module classpath.
+            Class<?> activityThreadClass = Class.forName("android.app.ActivityThread");
+            Object application = activityThreadClass.getMethod("currentApplication").invoke(null);
+            if (application instanceof Application) {
+                return ((Application) application).getApplicationContext();
+            }
+        } catch (Exception ignored) {
+            // Fall through and return null below.
+        }
+
+        return null;
+    }
+
+    private static Activity getCurrentUnityActivity() {
+        try {
+            Class<?> unityPlayerClass = Class.forName("com.unity3d.player.UnityPlayer");
+            Object currentActivity = unityPlayerClass.getField("currentActivity").get(null);
+            if (currentActivity instanceof Activity) {
+                return (Activity) currentActivity;
+            }
+        } catch (Exception ignored) {
+            // Fall through and return null below.
+        }
+
+        return null;
     }
 
     public static void setDevKey(String key) {

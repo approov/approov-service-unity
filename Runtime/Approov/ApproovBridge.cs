@@ -346,6 +346,32 @@ namespace Approov
         private const string AndroidBridgeClassName = "io.approov.unity.service.ApproovUnityBridge";
         private static AndroidJavaClass sBridgeClass;
 
+        private static sbyte[] ToSignedBytes(byte[] bytes)
+        {
+            if (bytes == null)
+            {
+                return null;
+            }
+
+            // Unity's Android JNI bridge now expects signed byte arrays for Java byte[] marshaling.
+            sbyte[] signedBytes = new sbyte[bytes.Length];
+            Buffer.BlockCopy(bytes, 0, signedBytes, 0, bytes.Length);
+            return signedBytes;
+        }
+
+        private static byte[] ToUnsignedBytes(sbyte[] bytes)
+        {
+            if (bytes == null)
+            {
+                return null;
+            }
+
+            // Convert the Java byte[] result back into the public C# byte[] shape.
+            byte[] unsignedBytes = new byte[bytes.Length];
+            Buffer.BlockCopy(bytes, 0, unsignedBytes, 0, bytes.Length);
+            return unsignedBytes;
+        }
+
         private static AndroidJavaClass BridgeClass
         {
             get
@@ -412,12 +438,18 @@ namespace Approov
 
         public static byte[] GetIntegrityMeasurementProof(byte[] nonce, byte[] measurementConfig)
         {
-            return BridgeClass.CallStatic<byte[]>("getIntegrityMeasurementProof", nonce, measurementConfig);
+            return ToUnsignedBytes(BridgeClass.CallStatic<sbyte[]>(
+                "getIntegrityMeasurementProof",
+                ToSignedBytes(nonce),
+                ToSignedBytes(measurementConfig)));
         }
 
         public static byte[] GetDeviceMeasurementProof(byte[] nonce, byte[] measurementConfig)
         {
-            return BridgeClass.CallStatic<byte[]>("getDeviceMeasurementProof", nonce, measurementConfig);
+            return ToUnsignedBytes(BridgeClass.CallStatic<sbyte[]>(
+                "getDeviceMeasurementProof",
+                ToSignedBytes(nonce),
+                ToSignedBytes(measurementConfig)));
         }
 
         public static string GetDeviceID()
@@ -437,7 +469,7 @@ namespace Approov
 
         public static string ShouldProceedWithNetworkConnection(byte[] cert, string domain, string pinType)
         {
-            string result = BridgeClass.CallStatic<string>("shouldProceedWithConnection", cert, domain, pinType);
+            string result = BridgeClass.CallStatic<string>("shouldProceedWithConnection", ToSignedBytes(cert), domain, pinType);
             return result == SUCCESS ? null : result;
         }
 #else

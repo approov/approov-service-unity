@@ -75,3 +75,7 @@ HttpClient client = ApproovService.CreateHttpClient();
 ## Internal Bridge
 
 The native bridge is an internal package detail. It is intentionally not part of the supported public API contract.
+
+## Android Requirement
+
+Android builds require a project `minSdkVersion` of 23 or higher because the packaged Approov Android integration targets API 23+.
