@@ -493,6 +493,10 @@ char* Approov_getAccountMessageSignature(Byte* message, int messageLength) {
     }
     // Convert to NSString
     NSString *str = [[NSString alloc] initWithBytes:message length:messageLength encoding:NSUTF8StringEncoding];
+    if (str == nil) {
+        return NULL;
+    }
+
     return copyCStringFromNSString([Approov getAccountMessageSignature:str]);
 }
 
@@ -502,6 +506,10 @@ char* Approov_getInstallMessageSignature(Byte* message, int messageLength) {
     }
 
     NSString *str = [[NSString alloc] initWithBytes:message length:messageLength encoding:NSUTF8StringEncoding];
+    if (str == nil) {
+        return NULL;
+    }
+
     return copyCStringFromNSString([Approov getInstallMessageSignature:str]);
 }
 

@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net.Http;
 using System.Text;
+using System.Threading.Tasks;
+using UnityEngine;
 using UnityEngine.Networking;
 
 namespace Approov
@@ -15,6 +18,7 @@ namespace Approov
 
     public sealed class ApproovRequestContext
     {
+        private const string TAG = "ApproovRequestContext ";
         private readonly Func<string, string> _getHeader;
         private readonly Action<string, string> _setHeader;
         private readonly Action<Uri> _setUri;
@@ -81,7 +85,8 @@ namespace Approov
 
         public bool HasHeader(string name)
         {
-            return !string.IsNullOrWhiteSpace(GetHeader(name));
+            // Header presence is independent from whether the stored value is empty.
+            return GetHeader(name) != null;
         }
 
         public void SetHeader(string name, string value)
@@ -164,6 +169,13 @@ namespace Approov
                 throw new ArgumentNullException(nameof(request));
             }
 
+            Dictionary<string, string> headers = new(StringComparer.OrdinalIgnoreCase);
+            // UnityWebRequest does not expose a way to enumerate outbound request headers, so snapshots
+            // cannot fully clone header state like HttpRequestMessage can. The live request context created
+            // by Create(UnityWebRequest) still resolves headers through GetRequestHeader while the request
+            // is mutable on the main thread; snapshots intentionally preserve only the request metadata and
+            // any readable body bytes needed off-thread, such as certificate validation decisions.
+
             return new ApproovRequestContext(
                 ApproovRequestTransport.Snapshot,
                 request.method,
@@ -172,8 +184,8 @@ namespace Approov
                 null,
                 null,
                 null,
-                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
-                null);
+                headers,
+                TryGetUnityBodyBytes(request));
         }
 
         internal static ApproovRequestContext CreateSnapshot(HttpRequestMessage request)
@@ -254,11 +266,27 @@ namespace Approov
 
             try
             {
-                request.Content.LoadIntoBufferAsync().GetAwaiter().GetResult();
-                return request.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+                request.Content.LoadIntoBufferAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+                return request.Content.ReadAsByteArrayAsync().ConfigureAwait(false).GetAwaiter().GetResult();
             }
-            catch
+            catch (IOException ex)
             {
+                Debug.LogWarning(TAG + "TryGetHttpBodyBytes failed to read buffered content: " + ex.Message);
+                return null;
+            }
+            catch (TaskCanceledException ex)
+            {
+                Debug.LogWarning(TAG + "TryGetHttpBodyBytes was canceled: " + ex.Message);
+                return null;
+            }
+            catch (ObjectDisposedException ex)
+            {
+                Debug.LogWarning(TAG + "TryGetHttpBodyBytes cannot read disposed content: " + ex.Message);
+                return null;
+            }
+            catch (InvalidOperationException ex)
+            {
+                Debug.LogWarning(TAG + "TryGetHttpBodyBytes cannot buffer content: " + ex.Message);
                 return null;
             }
         }
@@ -291,7 +319,7 @@ namespace Approov
 
         private static Uri CreateUri(string url)
         {
-            return string.IsNullOrWhiteSpace(url) ? null : new Uri(url, UriKind.Absolute);
+            return string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out Uri uri) ? null : uri;
         }
     }
 }

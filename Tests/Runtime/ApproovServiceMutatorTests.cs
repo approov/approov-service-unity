@@ -82,5 +82,29 @@ namespace Approov.Tests
                 ApproovService.RemoveExclusionURLRegex(regex);
             }
         }
+
+        [Test]
+        public void HasHeader_ReturnsTrueForEmptyHeaderValue()
+        {
+            HttpRequestMessage request = new(HttpMethod.Get, "https://api.example.com");
+            request.Headers.TryAddWithoutValidation("X-Empty", string.Empty);
+
+            ApproovRequestContext context = ApproovRequestContext.Create(request);
+
+            Assert.That(context.GetHeader("X-Empty"), Is.EqualTo(string.Empty));
+            Assert.That(context.HasHeader("X-Empty"), Is.True);
+        }
+
+        [Test]
+        public void Create_ReturnsNullUriForMalformedUrl()
+        {
+            UnityEngine.Networking.UnityWebRequest request = new(
+                "not a valid url",
+                UnityEngine.Networking.UnityWebRequest.kHttpVerbGET);
+
+            ApproovRequestContext context = ApproovRequestContext.Create(request);
+
+            Assert.That(context.Uri, Is.Null);
+        }
     }
 }

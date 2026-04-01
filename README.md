@@ -62,6 +62,8 @@ The runtime now exposes an `ApproovServiceMutator` hook point so request policy 
 ApproovService.SetServiceMutator(new MyMutator());
 ```
 
+`MyMutator` should derive from `ApproovServiceMutator`. Override the hook methods your policy needs, typically `ShouldProcessRequest`, `HandleInterceptorFetchTokenResult`, `HandleHeaderSubstitutionResult`, `HandleQueryParamSubstitutionResult`, `HandleProcessedRequest`, and `ShouldProcessPinning`.
+
 To enable default RFC 9421 request signing with installation keys:
 
 ```csharp
@@ -74,6 +76,8 @@ ApproovService.SetServiceMutator(signer);
 The default signer adds `Signature` and `Signature-Input` headers only after an Approov token has been added to the request. It signs `@method`, `@target-uri`, the Approov token header, the optional trace header, selected request headers, and `Content-Digest` when the body is readable.
 
 For direct use of the underlying SDK signing primitives:
+
+Pass `message` as the exact string payload to sign, typically a UTF-8 textual value such as a canonical request fragment or other plain-text payload. The runtime signs the raw string you provide, so do not pre-hash it and do not rely on implicit trimming; for example, `"orderId=12345&timestamp=1712345678"`.
 
 ```csharp
 string accountSignature = ApproovService.GetAccountMessageSignature(message);

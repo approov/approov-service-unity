@@ -65,7 +65,7 @@ namespace Approov
                 throw new NetworkingErrorException("ApproovRequestProcessor Forced pin update required", true);
             }
 
-            Console.WriteLine("ApproovRequestProcessor FetchToken: " + requestUrl + " " + ApproovService.ApproovTokenFetchStatusToString(approovResult.status));
+            ApproovService.LogTrace("ApproovRequestProcessor FetchToken: " + requestUrl + " " + ApproovService.ApproovTokenFetchStatusToString(approovResult.status));
             if (!mutator.HandleInterceptorFetchTokenResult(request, approovResult))
             {
                 ApproovService.LogTrace("ApproovRequestProcessor mutator allowed request to proceed without Approov changes");
@@ -144,7 +144,7 @@ namespace Approov
 
         private static void ApplyQuerySubstitutions(ApproovRequestContext request, ApproovServiceMutator mutator, ApproovRequestMutations changes)
         {
-            string originalUrl = request.Uri.AbsoluteUri;
+            string originalUrl = request.Uri?.AbsoluteUri ?? string.Empty;
             string updatedUrl = originalUrl;
             List<string> updatedKeys = null;
 

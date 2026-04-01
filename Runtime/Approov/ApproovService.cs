@@ -224,13 +224,17 @@ namespace Approov
             {
                 if (request.certificateHandler == null || request.certificateHandler is ApproovCertificateHandler)
                 {
+                    CertificateHandler oldHandler = request.certificateHandler;
                     request.certificateHandler = new ApproovCertificateHandler(request);
+                    oldHandler?.Dispose();
                     LogTrace(TAG + "SendWebRequest refreshed ApproovCertificateHandler");
                 }
             }
             else if (request.certificateHandler is ApproovCertificateHandler)
             {
+                CertificateHandler oldHandler = request.certificateHandler;
                 request.certificateHandler = null;
+                oldHandler.Dispose();
                 LogTrace(TAG + "SendWebRequest removed ApproovCertificateHandler because pinning was skipped by mutator");
             }
 

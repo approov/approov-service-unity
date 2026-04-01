@@ -33,7 +33,7 @@ namespace Approov
 
     internal static class StructuredFieldValueSerializer
     {
-        public static string SerializeDictionary(IReadOnlyList<System.Collections.Generic.KeyValuePair<string, StructuredFieldItem>> entries)
+        public static string SerializeDictionary(IReadOnlyList<KeyValuePair<string, StructuredFieldItem>> entries)
         {
             StringBuilder builder = new();
             for (int i = 0; i < entries.Count; i++)
@@ -43,8 +43,14 @@ namespace Approov
                     builder.Append(", ");
                 }
 
-                System.Collections.Generic.KeyValuePair<string, StructuredFieldItem> entry = entries[i];
+                KeyValuePair<string, StructuredFieldItem> entry = entries[i];
                 builder.Append(entry.Key);
+                if (entry.Value.Value is bool boolean && boolean)
+                {
+                    AppendParameters(builder, entry.Value.Parameters);
+                    continue;
+                }
+
                 builder.Append('=');
                 builder.Append(SerializeItem(entry.Value));
             }

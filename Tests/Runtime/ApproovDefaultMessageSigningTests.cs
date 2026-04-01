@@ -85,6 +85,21 @@ namespace Approov.Tests
         }
 
         [Test]
+        public void SerializeDictionary_OmitsEqualsForBareBooleanTrue()
+        {
+            string serialized = StructuredFieldValueSerializer.SerializeDictionary(new List<KeyValuePair<string, StructuredFieldItem>>
+            {
+                new("sig", new StructuredFieldItem(true, new[]
+                {
+                    new StructuredFieldParameter("key", "value")
+                })),
+                new("alg", new StructuredFieldItem("ecdsa-p256-sha256"))
+            });
+
+            Assert.That(serialized, Is.EqualTo("sig;key=\"value\", alg=\"ecdsa-p256-sha256\""));
+        }
+
+        [Test]
         public void HandleProcessedRequest_SkipsSigningWhenHostFactoryIsNull()
         {
             HttpRequestMessage request = new(HttpMethod.Get, "https://api.example.com/v1/test");
