@@ -46,6 +46,12 @@ namespace Approov
                 return sslPolicyErrors == SslPolicyErrors.None;
             }
 
+            if (requestMessage != null && !ApproovService.ShouldApplyPinning(ApproovRequestContext.CreateSnapshot(requestMessage)))
+            {
+                ApproovService.LogTrace("ApproovHttpClientHandler ValidateServerCertificate skipping pinning because mutator disabled it");
+                return sslPolicyErrors == SslPolicyErrors.None;
+            }
+
             if (certificate == null || requestMessage?.RequestUri == null)
             {
                 ApproovService.LogTrace("ApproovHttpClientHandler ValidateServerCertificate missing certificate or request URI");

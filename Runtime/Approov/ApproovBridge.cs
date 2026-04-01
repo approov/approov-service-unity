@@ -211,7 +211,10 @@ namespace Approov
         private static extern IntPtr Approov_getDeviceID();
 
         [DllImport("__Internal")]
-        private static extern IntPtr Approov_getMessageSignature(byte[] message, int messageLength);
+        private static extern IntPtr Approov_getAccountMessageSignature(byte[] message, int messageLength);
+
+        [DllImport("__Internal")]
+        private static extern IntPtr Approov_getInstallMessageSignature(byte[] message, int messageLength);
 
         [DllImport("__Internal")]
         private static extern void Approov_emptyGlobalCacheDictionary();
@@ -319,7 +322,7 @@ namespace Approov
             return StringFromNative(Approov_getDeviceID());
         }
 
-        public static string GetMessageSignature(string message)
+        public static string GetAccountMessageSignature(string message)
         {
             if (string.IsNullOrEmpty(message))
             {
@@ -327,7 +330,18 @@ namespace Approov
             }
 
             byte[] messageBytes = Encoding.UTF8.GetBytes(message);
-            return StringFromNative(Approov_getMessageSignature(messageBytes, messageBytes.Length));
+            return StringFromNative(Approov_getAccountMessageSignature(messageBytes, messageBytes.Length));
+        }
+
+        public static string GetInstallMessageSignature(string message)
+        {
+            if (string.IsNullOrEmpty(message))
+            {
+                return null;
+            }
+
+            byte[] messageBytes = Encoding.UTF8.GetBytes(message);
+            return StringFromNative(Approov_getInstallMessageSignature(messageBytes, messageBytes.Length));
         }
 
         public static void ClearCertificateCache()
@@ -457,9 +471,14 @@ namespace Approov
             return BridgeClass.CallStatic<string>("getDeviceID");
         }
 
-        public static string GetMessageSignature(string message)
+        public static string GetAccountMessageSignature(string message)
         {
-            return BridgeClass.CallStatic<string>("getMessageSignature", message);
+            return BridgeClass.CallStatic<string>("getAccountMessageSignature", message);
+        }
+
+        public static string GetInstallMessageSignature(string message)
+        {
+            return BridgeClass.CallStatic<string>("getInstallMessageSignature", message);
         }
 
         public static void ClearCertificateCache()
@@ -494,7 +513,8 @@ namespace Approov
         public static byte[] GetIntegrityMeasurementProof(byte[] nonce, byte[] measurementConfig) => null;
         public static byte[] GetDeviceMeasurementProof(byte[] nonce, byte[] measurementConfig) => null;
         public static string GetDeviceID() => null;
-        public static string GetMessageSignature(string message) => null;
+        public static string GetAccountMessageSignature(string message) => null;
+        public static string GetInstallMessageSignature(string message) => null;
         public static void ClearCertificateCache() {}
         public static string ShouldProceedWithNetworkConnection(byte[] cert, string url, string pinType) => null;
 #endif

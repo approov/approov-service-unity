@@ -458,27 +458,51 @@ char* Approov_getDeviceID() {
     return aStringCopy;
 }
 
+static char* copyCStringFromNSString(NSString *value) {
+    if (value == nil) {
+        return NULL;
+    }
+
+    const char* resultCString = [value UTF8String];
+    if (resultCString == NULL) {
+        return NULL;
+    }
+
+    char* stringCopy = (char*)malloc(strlen(resultCString) + 1);
+    if (stringCopy == NULL) {
+        return NULL;
+    }
+
+    memcpy(stringCopy, resultCString, strlen(resultCString) + 1);
+    return stringCopy;
+}
 
 extern "C" {
     char* Approov_getMessageSignature(Byte* message, int messageLength);
+    char* Approov_getAccountMessageSignature(Byte* message, int messageLength);
+    char* Approov_getInstallMessageSignature(Byte* message, int messageLength);
 }
 
 char* Approov_getMessageSignature(Byte* message, int messageLength) {
+    return Approov_getAccountMessageSignature(message, messageLength);
+}
+
+char* Approov_getAccountMessageSignature(Byte* message, int messageLength) {
     if (message == NULL) {
         return NULL;
     }
     // Convert to NSString
     NSString *str = [[NSString alloc] initWithBytes:message length:messageLength encoding:NSUTF8StringEncoding];
-    // Call the getMessageSignature method
-    NSString *resultString = [Approov getMessageSignature:str];
-    const char* resultCString = [resultString UTF8String];
-    // Create a copy of the string to return
-    char* aStringCopy = (char*)malloc(strlen(resultCString) + 1);
-    if (aStringCopy == NULL) {
+    return copyCStringFromNSString([Approov getAccountMessageSignature:str]);
+}
+
+char* Approov_getInstallMessageSignature(Byte* message, int messageLength) {
+    if (message == NULL) {
         return NULL;
     }
-    memcpy(aStringCopy, resultCString, strlen(resultCString) + 1);
-    return aStringCopy;
+
+    NSString *str = [[NSString alloc] initWithBytes:message length:messageLength encoding:NSUTF8StringEncoding];
+    return copyCStringFromNSString([Approov getInstallMessageSignature:str]);
 }
 
 /* SPKI headers for each key type and size */

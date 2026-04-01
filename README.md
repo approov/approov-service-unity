@@ -54,11 +54,41 @@ HttpClient client = ApproovService.CreateHttpClient();
 HttpResponseMessage response = await client.GetAsync("https://approov.io");
 ```
 
+## Message Signing And Mutators
+
+The runtime now exposes an `ApproovServiceMutator` hook point so request policy can be customized without forking the package. Install a mutator once during app startup:
+
+```csharp
+ApproovService.SetServiceMutator(new MyMutator());
+```
+
+To enable default RFC 9421 request signing with installation keys:
+
+```csharp
+ApproovDefaultMessageSigning signer = new ApproovDefaultMessageSigning()
+    .SetDefaultFactory(ApproovDefaultMessageSigning.GenerateDefaultSignatureParametersFactory());
+
+ApproovService.SetServiceMutator(signer);
+```
+
+The default signer adds `Signature` and `Signature-Input` headers only after an Approov token has been added to the request. It signs `@method`, `@target-uri`, the Approov token header, the optional trace header, selected request headers, and `Content-Digest` when the body is readable.
+
+For direct use of the underlying SDK signing primitives:
+
+```csharp
+string accountSignature = ApproovService.GetAccountMessageSignature(message);
+string installSignature = ApproovService.GetInstallMessageSignature(message);
+```
+
 ## Supported Surface
 
 - `ApproovService`
 - `ApproovWebRequest`
 - `ApproovHttpClientHandler`
+- `ApproovServiceMutator`
+- `ApproovRequestContext`
+- `ApproovRequestMutations`
+- `ApproovDefaultMessageSigning`
 - `ApproovException` hierarchy
 
 Low-level native bridge details are package internals and are not the recommended integration surface.

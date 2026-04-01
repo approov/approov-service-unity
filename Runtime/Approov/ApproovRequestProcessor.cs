@@ -10,27 +10,19 @@ namespace Approov
     {
         public static void ApplyToUnityWebRequest(UnityWebRequest request)
         {
-            Apply(
-                request.uri ?? new Uri(request.url),
-                request.GetRequestHeader,
-                request.SetRequestHeader,
-                uri => request.uri = uri);
+            Apply(ApproovRequestContext.Create(request));
         }
 
         public static void ApplyToHttpRequestMessage(HttpRequestMessage request)
         {
-            Apply(
-                request.RequestUri,
-                header => GetHttpHeader(request, header),
-                (header, value) => SetHttpHeader(request, header, value),
-                uri => request.RequestUri = uri);
+            Apply(ApproovRequestContext.Create(request));
         }
 
-        private static void Apply(Uri requestUri, Func<string, string> getHeader, Action<string, string> setHeader, Action<Uri> setUri)
+        private static void Apply(ApproovRequestContext request)
         {
-            if (requestUri == null)
+            if (request == null)
             {
-                throw new ArgumentNullException(nameof(requestUri));
+                throw new ArgumentNullException(nameof(request));
             }
 
             if (!ApproovService.IsSDKInitialized())
@@ -38,218 +30,160 @@ namespace Approov
                 throw new InitializationFailureException("ApproovService Error: SDK not initialized");
             }
 
-            string urlWithBaseAddress = requestUri.AbsoluteUri;
-            ApproovService.LogTrace("ApproovRequestProcessor Apply start url=" + urlWithBaseAddress);
-            if (ApproovService.CheckURLIsExcluded(urlWithBaseAddress))
+            ApproovServiceMutator mutator = ApproovService.GetServiceMutator();
+            if (!mutator.ShouldProcessRequest(request))
             {
-                ApproovService.LogTrace("ApproovRequestProcessor URL excluded from protection");
+                ApproovService.LogTrace("ApproovRequestProcessor request skipped by mutator");
                 return;
             }
 
+            string requestUrl = request.Uri?.AbsoluteUri;
+            ApproovService.LogTrace("ApproovRequestProcessor Apply start url=" + requestUrl);
+
             string bindingHeader = ApproovService.GetBindingHeader();
-            if (bindingHeader != null)
+            if (!string.IsNullOrWhiteSpace(bindingHeader))
             {
-                string headerValue = getHeader(bindingHeader);
-                if (headerValue == null)
+                string bindingValue = request.GetHeader(bindingHeader);
+                if (bindingValue == null)
                 {
                     throw new ConfigurationFailureException("ApproovRequestProcessor Missing token binding header: " + bindingHeader);
                 }
 
-                ApproovService.LogTrace("ApproovRequestProcessor Binding header present: " + bindingHeader + " valueLength=" + headerValue.Length);
-                ApproovService.SetDataHashInToken(headerValue);
-            }
-            else
-            {
-                ApproovService.LogTrace("ApproovRequestProcessor No binding header configured");
+                ApproovService.SetDataHashInToken(bindingValue);
             }
 
-            ApproovTokenFetchResult approovResult = ApproovBridge.FetchApproovTokenAndWait(urlWithBaseAddress);
+            ApproovTokenFetchResult approovResult = ApproovBridge.FetchApproovTokenAndWait(requestUrl);
             if (approovResult.isConfigChanged)
             {
-                ApproovService.LogTrace("ApproovRequestProcessor SDK configuration changed, clearing pin cache and fetching latest config");
+                ApproovService.LogTrace("ApproovRequestProcessor SDK configuration changed, refreshing pin state");
                 ApproovBridge.ClearCertificateCache();
                 ApproovService.FetchConfig();
             }
 
             if (approovResult.isForceApplyPins)
             {
-                ApproovService.LogTrace("ApproovRequestProcessor ForceApplyPins requested by SDK");
-                throw new NetworkingErrorException("ApproovRequestProcessor Forced pin update required");
+                throw new NetworkingErrorException("ApproovRequestProcessor Forced pin update required", true);
             }
 
-            ApproovTokenFetchStatus status = approovResult.status;
-            Console.WriteLine("ApproovRequestProcessor FetchToken: " + urlWithBaseAddress + " " + ApproovService.ApproovTokenFetchStatusToString(status));
-            if (status == ApproovTokenFetchStatus.Success)
+            Console.WriteLine("ApproovRequestProcessor FetchToken: " + requestUrl + " " + ApproovService.ApproovTokenFetchStatusToString(approovResult.status));
+            if (!mutator.HandleInterceptorFetchTokenResult(request, approovResult))
             {
-                if (!string.IsNullOrEmpty(approovResult.token))
-                {
-                    setHeader(ApproovService.GetTokenHeader(), ApproovService.GetTokenPrefix() + approovResult.token);
-                    ApproovService.LogTrace("ApproovRequestProcessor Added token header " + ApproovService.GetTokenHeader());
-                }
-                else
-                {
-                    ApproovService.LogTrace("ApproovRequestProcessor Token fetch succeeded without a token payload");
-                }
-
-                string traceIDHeader = ApproovService.GetApproovTraceIDHeader();
-                if (!string.IsNullOrWhiteSpace(traceIDHeader) && !string.IsNullOrWhiteSpace(approovResult.traceID))
-                {
-                    setHeader(traceIDHeader, approovResult.traceID);
-                    ApproovService.LogTrace("ApproovRequestProcessor Added trace header " + traceIDHeader);
-                }
-            }
-            else if (status == ApproovTokenFetchStatus.NoNetwork || status == ApproovTokenFetchStatus.PoorNetwork || status == ApproovTokenFetchStatus.MITMDetected)
-            {
-                ApproovService.LogTrace("ApproovRequestProcessor Token fetch hit transient status " + ApproovService.ApproovTokenFetchStatusToString(status) + ", proceedOnNetworkFailure=" + ApproovService.GetProceedOnNetworkFailure());
-                if (!ApproovService.GetProceedOnNetworkFailure())
-                {
-                    throw new NetworkingErrorException("ApproovRequestProcessor Retry attempt needed. " + approovResult.loggableToken, true);
-                }
-            }
-            else if (status != ApproovTokenFetchStatus.UnknownURL &&
-                     status != ApproovTokenFetchStatus.UnprotectedURL &&
-                     status != ApproovTokenFetchStatus.NoApproovService)
-            {
-                throw new PermanentException("ApproovRequestProcessor Unknown Approov token fetch result " + ApproovService.ApproovTokenFetchStatusToString(status));
-            }
-
-            if (status != ApproovTokenFetchStatus.Success && status != ApproovTokenFetchStatus.UnprotectedURL)
-            {
-                ApproovService.LogTrace("ApproovRequestProcessor Skipping substitutions because token status was " + ApproovService.ApproovTokenFetchStatusToString(status));
+                ApproovService.LogTrace("ApproovRequestProcessor mutator allowed request to proceed without Approov changes");
                 return;
             }
 
-            foreach (KeyValuePair<string, string> substitutionHeader in ApproovService.GetSubstitutionHeaders())
+            ApproovRequestMutations changes = new();
+            ApplyTokenAndTraceHeaders(request, approovResult, changes);
+            ApplyHeaderSubstitutions(request, mutator, changes);
+            ApplyQuerySubstitutions(request, mutator, changes);
+
+            mutator.HandleProcessedRequest(request, changes);
+            ApproovService.LogTrace("ApproovRequestProcessor Apply complete");
+        }
+
+        private static void ApplyTokenAndTraceHeaders(ApproovRequestContext request, ApproovTokenFetchResult approovResult, ApproovRequestMutations changes)
+        {
+            string tokenHeaderKey = ApproovService.GetTokenHeader();
+            string tokenValue = approovResult.token;
+            if (string.IsNullOrEmpty(tokenValue) && ApproovService.GetUseApproovStatusIfNoToken())
             {
-                string headerValue = getHeader(substitutionHeader.Key);
+                tokenValue = ApproovService.ApproovTokenFetchStatusToString(approovResult.status);
+            }
+
+            if (tokenValue != null)
+            {
+                request.SetHeader(tokenHeaderKey, ApproovService.GetTokenPrefix() + tokenValue);
+                changes.TokenHeaderKey = tokenHeaderKey;
+            }
+
+            string traceHeader = ApproovService.GetApproovTraceIDHeader();
+            if (!string.IsNullOrWhiteSpace(traceHeader) && !string.IsNullOrWhiteSpace(approovResult.traceID))
+            {
+                request.SetHeader(traceHeader, approovResult.traceID);
+                changes.TraceIDHeaderKey = traceHeader;
+            }
+        }
+
+        private static void ApplyHeaderSubstitutions(ApproovRequestContext request, ApproovServiceMutator mutator, ApproovRequestMutations changes)
+        {
+            Dictionary<string, string> substitutionHeaders = ApproovService.GetSubstitutionHeaders();
+            List<string> updatedHeaders = null;
+            foreach (System.Collections.Generic.KeyValuePair<string, string> substitutionHeader in substitutionHeaders)
+            {
+                string headerValue = request.GetHeader(substitutionHeader.Key);
                 if (headerValue == null)
                 {
                     continue;
                 }
 
                 string prefix = substitutionHeader.Value ?? string.Empty;
-                if (!headerValue.StartsWith(prefix) || headerValue.Length <= prefix.Length)
+                if (!headerValue.StartsWith(prefix, StringComparison.Ordinal) || headerValue.Length <= prefix.Length)
                 {
                     continue;
                 }
 
                 string secureStringKey = headerValue.Substring(prefix.Length);
-                ApproovService.LogTrace("ApproovRequestProcessor Substituting header " + substitutionHeader.Key + " using secure string key");
                 ApproovTokenFetchResult secureStringResult = ApproovBridge.FetchSecureStringAndWait(secureStringKey, null);
-                if (secureStringResult.status == ApproovTokenFetchStatus.Success)
+                if (!mutator.HandleHeaderSubstitutionResult(request, secureStringResult, substitutionHeader.Key))
                 {
-                    if (secureStringResult.secureString == null)
-                    {
-                        throw new ApproovException("ApproovRequestProcessor Header substitution returned null secure string");
-                    }
+                    continue;
+                }
 
-                    setHeader(substitutionHeader.Key, prefix + secureStringResult.secureString);
-                    ApproovService.LogTrace("ApproovRequestProcessor Substituted header " + substitutionHeader.Key);
-                }
-                else if (secureStringResult.status == ApproovTokenFetchStatus.Rejected)
+                if (secureStringResult.secureString == null)
                 {
-                    throw new RejectionException("ApproovRequestProcessor Header substitution rejected", secureStringResult.ARC, secureStringResult.rejectionReasons);
+                    throw new ApproovException("ApproovRequestProcessor Header substitution returned null secure string");
                 }
-                else if (secureStringResult.status == ApproovTokenFetchStatus.NoNetwork ||
-                         secureStringResult.status == ApproovTokenFetchStatus.PoorNetwork ||
-                         secureStringResult.status == ApproovTokenFetchStatus.MITMDetected)
-                {
-                    if (!ApproovService.GetProceedOnNetworkFailure())
-                    {
-                        throw new NetworkingErrorException("ApproovRequestProcessor Header substitution retry needed");
-                    }
-                }
-                else if (secureStringResult.status != ApproovTokenFetchStatus.UnknownKey)
-                {
-                    throw new PermanentException("ApproovRequestProcessor Header substitution: " + ApproovService.ApproovTokenFetchStatusToString(secureStringResult.status));
-                }
+
+                request.SetHeader(substitutionHeader.Key, prefix + secureStringResult.secureString);
+                updatedHeaders ??= new List<string>();
+                updatedHeaders.Add(substitutionHeader.Key);
             }
 
-            string updatedUrl = urlWithBaseAddress;
+            changes.SubstitutionHeaderKeys = updatedHeaders ?? new List<string>();
+        }
+
+        private static void ApplyQuerySubstitutions(ApproovRequestContext request, ApproovServiceMutator mutator, ApproovRequestMutations changes)
+        {
+            string originalUrl = request.Uri.AbsoluteUri;
+            string updatedUrl = originalUrl;
+            List<string> updatedKeys = null;
+
             foreach (string queryParameter in ApproovService.GetSubstitutionQueryParams())
             {
-                Regex regex = new Regex("([?&]" + Regex.Escape(queryParameter) + "=)([^&#]*)", RegexOptions.ECMAScript);
+                Regex regex = new("([?&]" + Regex.Escape(queryParameter) + "=)([^&#]*)", RegexOptions.ECMAScript);
                 if (!regex.IsMatch(updatedUrl))
                 {
                     continue;
                 }
 
-                ApproovService.LogTrace("ApproovRequestProcessor Substituting query parameter " + queryParameter);
                 updatedUrl = regex.Replace(updatedUrl, match =>
                 {
                     string secureStringKey = match.Groups[2].Value;
                     ApproovTokenFetchResult secureStringResult = ApproovBridge.FetchSecureStringAndWait(secureStringKey, null);
-                    if (secureStringResult.status == ApproovTokenFetchStatus.Success)
+                    if (!mutator.HandleQueryParamSubstitutionResult(request, secureStringResult, queryParameter))
                     {
-                        if (secureStringResult.secureString == null)
-                        {
-                            throw new ApproovException("ApproovRequestProcessor Query substitution returned null secure string");
-                        }
-
-                        return match.Groups[1].Value + Uri.EscapeDataString(secureStringResult.secureString);
+                        return match.Value;
                     }
 
-                    if (secureStringResult.status == ApproovTokenFetchStatus.Rejected)
+                    if (secureStringResult.secureString == null)
                     {
-                        throw new RejectionException("ApproovRequestProcessor Query substitution rejected", secureStringResult.ARC, secureStringResult.rejectionReasons);
+                        throw new ApproovException("ApproovRequestProcessor Query substitution returned null secure string");
                     }
 
-                    if (secureStringResult.status == ApproovTokenFetchStatus.NoNetwork ||
-                        secureStringResult.status == ApproovTokenFetchStatus.PoorNetwork ||
-                        secureStringResult.status == ApproovTokenFetchStatus.MITMDetected)
-                    {
-                        if (!ApproovService.GetProceedOnNetworkFailure())
-                        {
-                            throw new NetworkingErrorException("ApproovRequestProcessor Query substitution retry needed");
-                        }
-                    }
-                    else if (secureStringResult.status != ApproovTokenFetchStatus.UnknownKey)
-                    {
-                        throw new PermanentException("ApproovRequestProcessor Query substitution: " + ApproovService.ApproovTokenFetchStatusToString(secureStringResult.status));
-                    }
-
-                    return match.Value;
+                    updatedKeys ??= new List<string>();
+                    updatedKeys.Add(queryParameter);
+                    return match.Groups[1].Value + Uri.EscapeDataString(secureStringResult.secureString);
                 });
             }
 
-            if (!string.Equals(updatedUrl, urlWithBaseAddress, StringComparison.Ordinal))
+            if (!string.Equals(originalUrl, updatedUrl, StringComparison.Ordinal))
             {
-                setUri(new Uri(updatedUrl));
-                ApproovService.LogTrace("ApproovRequestProcessor Updated request URL after query substitutions");
+                request.Uri = new Uri(updatedUrl);
+                changes.SetSubstitutionQueryParamResults(originalUrl, updatedKeys ?? new List<string>());
             }
-
-            ApproovService.LogTrace("ApproovRequestProcessor Apply complete");
-        }
-
-        private static string GetHttpHeader(HttpRequestMessage request, string header)
-        {
-            if (request.Headers.TryGetValues(header, out IEnumerable<string> values))
+            else
             {
-                foreach (string value in values)
-                {
-                    return value;
-                }
-            }
-
-            if (request.Content != null && request.Content.Headers.TryGetValues(header, out values))
-            {
-                foreach (string value in values)
-                {
-                    return value;
-                }
-            }
-
-            return null;
-        }
-
-        private static void SetHttpHeader(HttpRequestMessage request, string header, string value)
-        {
-            request.Headers.Remove(header);
-            request.Content?.Headers.Remove(header);
-
-            if (!request.Headers.TryAddWithoutValidation(header, value) && request.Content != null)
-            {
-                request.Content.Headers.TryAddWithoutValidation(header, value);
+                changes.SubstitutionQueryParamKeys = updatedKeys ?? new List<string>();
             }
         }
     }

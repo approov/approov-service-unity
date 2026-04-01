@@ -132,7 +132,15 @@ public final class ApproovUnityBridge {
     }
 
     public static String getMessageSignature(String message) {
-        return Approov.getMessageSignature(message);
+        return getAccountMessageSignature(message);
+    }
+
+    public static String getAccountMessageSignature(String message) {
+        return Approov.getAccountMessageSignature(message);
+    }
+
+    public static String getInstallMessageSignature(String message) {
+        return Approov.getInstallMessageSignature(message);
     }
 
     public static void clearCertificateCache() {

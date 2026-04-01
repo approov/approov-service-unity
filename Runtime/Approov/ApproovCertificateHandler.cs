@@ -9,11 +9,13 @@ namespace Approov
         private static readonly string TAG = "ApproovCertificateHandler ";
         private readonly string requestUrl;
         private readonly string hostname;
+        private readonly ApproovRequestContext requestContext;
 
         public ApproovCertificateHandler(UnityWebRequest request)
         {
             // Certificate validation runs off the main thread, so cache any UnityWebRequest state here.
             requestUrl = request?.url ?? string.Empty;
+            requestContext = request == null ? null : ApproovRequestContext.CreateSnapshot(request);
 
             if (!string.IsNullOrWhiteSpace(requestUrl) &&
                 Uri.TryCreate(requestUrl, UriKind.Absolute, out Uri uri))
@@ -29,6 +31,12 @@ namespace Approov
         protected override bool ValidateCertificate(byte[] certificateData)
         {
             ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: validating certificate for " + hostname);
+
+            if (requestContext != null && !ApproovService.ShouldApplyPinning(requestContext))
+            {
+                ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: pinning skipped by mutator");
+                return true;
+            }
 
             if (string.IsNullOrWhiteSpace(hostname))
             {

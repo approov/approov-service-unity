@@ -5,6 +5,10 @@ The supported public API for this package is the high-level Unity surface:
 - `ApproovService`
 - `ApproovWebRequest`
 - `ApproovHttpClientHandler`
+- `ApproovServiceMutator`
+- `ApproovRequestContext`
+- `ApproovRequestMutations`
+- `ApproovDefaultMessageSigning`
 - `ApproovException` and its subclasses
 
 ## ApproovService
@@ -21,6 +25,8 @@ Use `ApproovService` to initialize the SDK and configure request behavior:
 - `SetLoggingLevel(ApproovLogLevel level)` / `GetLoggingLevel()`
 - `SetDetailedDebugLogging(bool enabled)` / `GetDetailedDebugLogging()`
 - `SetProceedOnNetworkFailure(bool proceed)` / `GetProceedOnNetworkFailure()`
+- `SetUseApproovStatusIfNoToken(bool shouldUse)` / `GetUseApproovStatusIfNoToken()`
+- `SetServiceMutator(ApproovServiceMutator mutator)` / `GetServiceMutator()`
 - `AddSubstitutionHeader(string header, string requiredPrefix)` / `RemoveSubstitutionHeader(string header)` / `GetSubstitutionHeaders()`
 - `AddSubstitutionQueryParam(string key)` / `RemoveSubstitutionQueryParam(string key)` / `GetSubstitutionQueryParams()`
 - `AddExclusionURLRegex(string urlRegex)` / `RemoveExclusionURLRegex(string urlRegex)` / `CheckURLIsExcluded(string url)`
@@ -31,7 +37,9 @@ Use `ApproovService` to initialize the SDK and configure request behavior:
 - `Precheck()`
 - `GetDeviceID()`
 - `SetDataHashInToken(string data)`
-- `GetMessageSignature(string message)`
+- `GetMessageSignature(string message)` obsolete alias for account signing
+- `GetAccountMessageSignature(string message)`
+- `GetInstallMessageSignature(string message)`
 - `FetchToken(string url)`
 - `GetPinsJSON(string pinType)`
 - `FetchConfig()`
@@ -71,6 +79,39 @@ Recommended usage:
 ```csharp
 HttpClient client = ApproovService.CreateHttpClient();
 ```
+
+## Service Mutators
+
+`ApproovServiceMutator` provides virtual hooks for:
+
+- direct SDK fetch handling (`HandlePrecheckResult`, `HandleFetchTokenResult`, `HandleFetchSecureStringResult`, `HandleFetchCustomJwtResult`)
+- request-path policy (`ShouldProcessRequest`, `HandleInterceptorFetchTokenResult`, `HandleHeaderSubstitutionResult`, `HandleQueryParamSubstitutionResult`)
+- post-processing (`HandleProcessedRequest`)
+- pinning control (`ShouldProcessPinning`)
+
+`ApproovRequestContext` is the transport-neutral request wrapper used by those hooks. It exposes the transport kind, method, URI, header read/write helpers, and buffered body access when available.
+
+`ApproovRequestMutations` reports what Approov changed before `HandleProcessedRequest` runs: token header, trace header, substituted headers, original URL, and substituted query parameters.
+
+## Default Message Signing
+
+`ApproovDefaultMessageSigning` is an `ApproovServiceMutator` that adds HTTP message signatures after Approov token injection. Use:
+
+```csharp
+ApproovDefaultMessageSigning signer = new ApproovDefaultMessageSigning()
+    .SetDefaultFactory(ApproovDefaultMessageSigning.GenerateDefaultSignatureParametersFactory());
+
+ApproovService.SetServiceMutator(signer);
+```
+
+The generated default factory:
+
+- uses install signing (`ecdsa-p256-sha256`)
+- signs `@method` and `@target-uri`
+- includes the actual Approov token header and trace header when present
+- includes optional `Authorization`, `Content-Length`, and `Content-Type` headers
+- adds `created` and `expires`
+- adds `Content-Digest` using `sha-256` when the body is readable
 
 ## Internal Bridge
 
