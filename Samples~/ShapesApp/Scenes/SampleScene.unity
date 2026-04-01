@@ -1037,6 +1037,10 @@ MonoBehaviour:
   shapesButton: {fileID: 1239107361}
   statusText: {fileID: 1541585294}
   shapesImage: {fileID: 172951547}
+  defaultApproovEnabled: 1
+  defaultTransport: 0
+  defaultEndpoint: 1
+  defaultSignatureMode: 1
 --- !u!4 &2127327802
 Transform:
   m_ObjectHideFlags: 0

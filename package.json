@@ -31,7 +31,7 @@
   "samples": [
     {
       "displayName": "Shapes App",
-      "description": "Sample scene showing the recommended UnityWebRequest plus ApproovService.SendWebRequest integration against the Shapes demo backend.",
+      "description": "Sample scene showing UnityWebRequest and HttpClient integration against the Shapes demo backend, with runtime endpoint and message-signing controls.",
       "path": "Samples~/ShapesApp"
     }
   ]
