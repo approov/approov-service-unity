@@ -12,6 +12,23 @@ public class ShapesApp : MonoBehaviour
 {
     private const string ShapesHost = "https://shapes.approov.io/";
     private const string ApiKey = "yXClypapWNHIifHUWmBIyPFAm";
+    private static readonly ShapesTransportMode[] TransportModes =
+    {
+        ShapesTransportMode.UnityWebRequest,
+        ShapesTransportMode.HttpClient
+    };
+    private static readonly ShapesEndpointVersion[] EndpointModes =
+    {
+        ShapesEndpointVersion.V1,
+        ShapesEndpointVersion.V3,
+        ShapesEndpointVersion.V5
+    };
+    private static readonly ShapesSignatureMode[] SignatureModes =
+    {
+        ShapesSignatureMode.None,
+        ShapesSignatureMode.Install,
+        ShapesSignatureMode.Account
+    };
 
     public enum ShapesTransportMode
     {
@@ -458,10 +475,10 @@ public class ShapesApp : MonoBehaviour
 
     private void ApplyDefaultSelections()
     {
-        _approovToggle.isOn = defaultApproovEnabled;
-        _transportDropdown.value = (int)defaultTransport;
-        _endpointDropdown.value = (int)defaultEndpoint;
-        _signatureDropdown.value = (int)defaultSignatureMode;
+        _approovToggle.SetIsOnWithoutNotify(defaultApproovEnabled);
+        _transportDropdown.SetValueWithoutNotify(IndexOf(TransportModes, defaultTransport));
+        _endpointDropdown.SetValueWithoutNotify(IndexOf(EndpointModes, defaultEndpoint));
+        _signatureDropdown.SetValueWithoutNotify(IndexOf(SignatureModes, defaultSignatureMode));
         _transportDropdown.RefreshShownValue();
         _endpointDropdown.RefreshShownValue();
         _signatureDropdown.RefreshShownValue();
@@ -554,6 +571,12 @@ public class ShapesApp : MonoBehaviour
         dropdown.onValueChanged.RemoveAllListeners();
         dropdown.onValueChanged.AddListener(value => onChanged(value));
 
+        Image dropdownImage = dropdownObject.GetComponent<Image>();
+        if (dropdownImage != null)
+        {
+            dropdownImage.color = new Color(0.95f, 0.97f, 1f, 1f);
+        }
+
         LayoutElement dropdownLayout = dropdownObject.AddComponent<LayoutElement>();
         dropdownLayout.preferredWidth = 190f;
         dropdownLayout.flexibleWidth = 1f;
@@ -563,6 +586,31 @@ public class ShapesApp : MonoBehaviour
             text.font = statusText.font;
             text.fontSize = 13;
             text.color = new Color(0.15f, 0.15f, 0.15f, 1f);
+        }
+
+        Transform templateTransform = dropdownObject.transform.Find("Template");
+        if (templateTransform != null)
+        {
+            Image templateImage = templateTransform.GetComponent<Image>();
+            if (templateImage != null)
+            {
+                templateImage.color = new Color(0.95f, 0.97f, 1f, 0.98f);
+            }
+
+            Transform scrollbarTransform = templateTransform.Find("Scrollbar");
+            if (scrollbarTransform != null)
+            {
+                scrollbarTransform.gameObject.SetActive(false);
+            }
+
+            RectTransform viewport = templateTransform.Find("Viewport") as RectTransform;
+            if (viewport != null)
+            {
+                viewport.offsetMin = Vector2.zero;
+                viewport.offsetMax = Vector2.zero;
+            }
+
+            templateTransform.gameObject.SetActive(false);
         }
 
         return dropdown;
@@ -896,17 +944,17 @@ public class ShapesApp : MonoBehaviour
 
     private ShapesTransportMode GetSelectedTransport()
     {
-        return (ShapesTransportMode)_transportDropdown.value;
+        return ValueAt(TransportModes, _transportDropdown.value, defaultTransport);
     }
 
     internal ShapesEndpointVersion GetSelectedEndpoint()
     {
-        return (ShapesEndpointVersion)_endpointDropdown.value;
+        return ValueAt(EndpointModes, _endpointDropdown.value, defaultEndpoint);
     }
 
     internal ShapesSignatureMode GetSelectedSignatureMode()
     {
-        return (ShapesSignatureMode)_signatureDropdown.value;
+        return ValueAt(SignatureModes, _signatureDropdown.value, defaultSignatureMode);
     }
 
     private void SetInteractiveState(bool interactable)
@@ -949,5 +997,24 @@ public class ShapesApp : MonoBehaviour
     private static string GetTransportLabel(ShapesTransportMode transportMode)
     {
         return transportMode == ShapesTransportMode.HttpClient ? "HttpClient" : "UnityWebRequest";
+    }
+
+    private static int IndexOf<T>(IReadOnlyList<T> values, T target)
+    {
+        EqualityComparer<T> comparer = EqualityComparer<T>.Default;
+        for (int index = 0; index < values.Count; index++)
+        {
+            if (comparer.Equals(values[index], target))
+            {
+                return index;
+            }
+        }
+
+        return 0;
+    }
+
+    private static T ValueAt<T>(IReadOnlyList<T> values, int index, T fallback)
+    {
+        return index >= 0 && index < values.Count ? values[index] : fallback;
     }
 }
