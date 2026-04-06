@@ -304,18 +304,21 @@ namespace Approov
             SignatureParametersFactory factory = ResolveFactory(request.Uri);
             if (factory == null)
             {
+                ApproovService.LogTrace("ApproovDefaultMessageSigning: no signing factory configured for " + request.Uri);
                 return;
             }
 
             SignaturePlan plan = factory.CreatePlan(request, changes);
             if (plan == null || plan.Components.Count == 0)
             {
+                ApproovService.LogTrace("ApproovDefaultMessageSigning: no signature components produced for " + request.Uri);
                 return;
             }
 
             string signatureBase = BuildSignatureBase(request, plan);
             if (!TryGetSignatureBytes(plan.Mode, signatureBase, out string signatureLabel, out byte[] signatureBytes))
             {
+                ApproovService.LogTrace("ApproovDefaultMessageSigning: no signature bytes available for " + request.Uri);
                 return;
             }
 
@@ -337,6 +340,9 @@ namespace Approov
 
             request.SetHeader(SignatureHeader, signatureHeaderValue);
             request.SetHeader(SignatureInputHeader, signatureInputValue);
+            ApproovService.LogTrace(
+                "ApproovDefaultMessageSigning: added " + signatureLabel +
+                " signature with " + plan.Components.Count + " components for " + request.Uri);
         }
 
         public static SignatureParametersFactory GenerateDefaultSignatureParametersFactory()

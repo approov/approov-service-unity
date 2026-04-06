@@ -115,7 +115,7 @@ namespace Approov
                 if (!IsNativeInitializationSupported())
                 {
                     LogTrace(TAG + "Initialize skipped because native initialization is not supported on this platform");
-                    Debug.LogWarning(TAG + "Approov native initialization is only available on iOS and Android. The config string is stored in project settings, but Approov will remain disabled in this editor or desktop session.");
+                    LogWarning(TAG + "Approov native initialization is only available on iOS and Android. The config string is stored in project settings, but Approov will remain disabled in this editor or desktop session.");
                     return;
                 }
 
@@ -131,7 +131,7 @@ namespace Approov
                     throw new InitializationFailureException(TAG + "Error SDK initialization failed", false);
                 }
 #else
-                Debug.LogWarning(TAG + "Approov native initialization is not available on this platform.");
+                LogWarning(TAG + "Approov native initialization is not available on this platform.");
                 return;
 #endif
                 // Set a default user property so Approov logs can identify the service layer and app.
@@ -147,7 +147,7 @@ namespace Approov
                 string deviceID = GetDeviceID();
                 if (string.IsNullOrWhiteSpace(deviceID))
                 {
-                    Debug.LogWarning(TAG + "Unable to read the Approov device ID after initialization.");
+                    LogWarning(TAG + "Unable to read the Approov device ID after initialization.");
                 }
                 else
                 {
@@ -281,9 +281,30 @@ namespace Approov
             return GetLoggingLevel() == ApproovLogLevel.Trace;
         }
 
+        internal static bool ShouldLog(ApproovLogLevel level)
+        {
+            return level != ApproovLogLevel.Off && GetLoggingLevel() >= level;
+        }
+
+        internal static void LogError(string message)
+        {
+            if (ShouldLog(ApproovLogLevel.Error))
+            {
+                Debug.LogError(message);
+            }
+        }
+
+        internal static void LogWarning(string message)
+        {
+            if (ShouldLog(ApproovLogLevel.Warning))
+            {
+                Debug.LogWarning(message);
+            }
+        }
+
         internal static void LogTrace(string message)
         {
-            if (GetLoggingLevel() == ApproovLogLevel.Trace)
+            if (ShouldLog(ApproovLogLevel.Trace))
             {
                 Debug.Log(message);
             }
@@ -302,7 +323,7 @@ namespace Approov
             lock (BindingHeaderLock)
             {
                 BindingHeader = header;
-                Console.WriteLine(TAG + "SetBindingHeader " + header);
+                LogTrace(TAG + "SetBindingHeader " + header);
             }
         }
 
@@ -330,7 +351,7 @@ namespace Approov
             {
                 if (header != null) ApproovTokenHeader = header;
                 if (prefix != null) ApproovTokenPrefix = prefix;
-                Console.WriteLine(TAG + "SetTokenHeaderAndPrefix header: " + header + " prefix: " + prefix);
+                LogTrace(TAG + "SetTokenHeaderAndPrefix header: " + header + " prefix: " + prefix);
             }
         }
 
@@ -361,7 +382,7 @@ namespace Approov
             lock (HeaderAndPrefixLock)
             {
                 ApproovTraceIDHeader = header;
-                Console.WriteLine(TAG + "SetApproovTraceIDHeader " + (header ?? "null"));
+                LogTrace(TAG + "SetApproovTraceIDHeader " + (header ?? "null"));
             }
         }
 
@@ -389,7 +410,7 @@ namespace Approov
             lock (ProceedOnNetworkFailLock)
             {
                 ProceedOnNetworkFail = proceed;
-                Console.WriteLine(TAG + "SetProceedOnNetworkFailure " + proceed.ToString());
+                LogTrace(TAG + "SetProceedOnNetworkFailure " + proceed);
             }
         }
 
@@ -416,7 +437,7 @@ namespace Approov
             lock (UseApproovStatusIfNoTokenLock)
             {
                 UseApproovStatusIfNoToken = shouldUse;
-                Console.WriteLine(TAG + "SetUseApproovStatusIfNoToken " + shouldUse);
+                LogTrace(TAG + "SetUseApproovStatusIfNoToken " + shouldUse);
             }
         }
 
@@ -433,7 +454,7 @@ namespace Approov
             lock (ServiceMutatorLock)
             {
                 ServiceMutator = mutator ?? ApproovServiceMutator.Default;
-                Debug.Log(TAG + "SetServiceMutator " + ServiceMutator);
+                LogTrace(TAG + "SetServiceMutator " + ServiceMutator);
             }
         }
 
@@ -460,7 +481,7 @@ namespace Approov
             lock (SubstitutionHeadersLock)
             {
                 SubstitutionHeaders[header] = requiredPrefix ?? string.Empty;
-                Console.WriteLine(TAG + "AddSubstitutionHeader header: " + header + " requiredPrefix: " + requiredPrefix);
+                LogTrace(TAG + "AddSubstitutionHeader header: " + header + " requiredPrefix: " + requiredPrefix);
             }
         }
 
@@ -476,7 +497,7 @@ namespace Approov
                 if (SubstitutionHeaders.ContainsKey(header))
                 {
                     SubstitutionHeaders.Remove(header);
-                    Console.WriteLine(TAG + "RemoveSubstitutionHeader " + header);
+                    LogTrace(TAG + "RemoveSubstitutionHeader " + header);
                 }
             }
         }
@@ -524,9 +545,9 @@ namespace Approov
                             }
                         }
                         ExclusionURLRegexs.Add(reg);
-                        Console.WriteLine(TAG + "AddExclusionURLRegex " + urlRegex);
+                        LogTrace(TAG + "AddExclusionURLRegex " + urlRegex);
                     } catch (ArgumentException e) {
-                        Console.WriteLine(TAG + "AddExclusionURLRegex: " + e.Message);
+                        LogWarning(TAG + "AddExclusionURLRegex: " + e.Message);
                     }
                 }
             }
@@ -557,9 +578,9 @@ namespace Approov
                         {
                             ExclusionURLRegexs.Remove(regexToRemove);
                         }
-                        Console.WriteLine(TAG + "RemoveExclusionURLRegex " + urlRegex);
+                        LogTrace(TAG + "RemoveExclusionURLRegex " + urlRegex);
                     } catch (ArgumentException e) {
-                        Console.WriteLine(TAG + "RemoveExclusionURLRegex: " + e.Message);
+                        LogWarning(TAG + "RemoveExclusionURLRegex: " + e.Message);
                     }
                 }
             }
@@ -588,7 +609,7 @@ namespace Approov
                 Match match = pattern.Match(url, 0, url.Length);
                 if (match.Length > 0)
                 {
-                    Console.WriteLine(TAG + "CheckURLIsExcluded match for " + url);
+                    LogTrace(TAG + "CheckURLIsExcluded match for " + url);
                     return true;
                 }
             }
@@ -608,7 +629,7 @@ namespace Approov
             lock (SubstitutionQueryParamsLock)
             {
                 SubstitutionQueryParams.Add(key);
-                Console.WriteLine(TAG + "AddSubstitutionQueryParam " + key);
+                LogTrace(TAG + "AddSubstitutionQueryParam " + key);
             }
         }
 
@@ -623,7 +644,7 @@ namespace Approov
                 if (SubstitutionQueryParams.Contains(key))
                 {
                     SubstitutionQueryParams.Remove(key);
-                    Console.WriteLine(TAG + "RemoveSubstitutionQueryParam " + key);
+                    LogTrace(TAG + "RemoveSubstitutionQueryParam " + key);
                 }
             }
         }
@@ -776,6 +797,46 @@ namespace Approov
             }
         }
 
+        public static string DescribeFetchResult(ApproovTokenFetchResult fetchResult)
+        {
+            List<string> parts = new()
+            {
+                "status=" + ApproovTokenFetchStatusToString(fetchResult.status),
+                "configChanged=" + fetchResult.isConfigChanged,
+                "forceApplyPins=" + fetchResult.isForceApplyPins,
+                "hasToken=" + !string.IsNullOrWhiteSpace(fetchResult.token),
+                "hasTraceID=" + !string.IsNullOrWhiteSpace(fetchResult.traceID),
+                "hasSecureString=" + !string.IsNullOrWhiteSpace(fetchResult.secureString),
+            };
+
+            if (!string.IsNullOrWhiteSpace(fetchResult.token))
+            {
+                parts.Add("tokenLength=" + fetchResult.token.Length);
+            }
+
+            if (!string.IsNullOrWhiteSpace(fetchResult.traceID))
+            {
+                parts.Add("traceID=" + fetchResult.traceID);
+            }
+
+            if (!string.IsNullOrWhiteSpace(fetchResult.ARC))
+            {
+                parts.Add("ARC=" + fetchResult.ARC);
+            }
+
+            if (!string.IsNullOrWhiteSpace(fetchResult.rejectionReasons))
+            {
+                parts.Add("rejectionReasons=" + fetchResult.rejectionReasons);
+            }
+
+            if (!string.IsNullOrWhiteSpace(fetchResult.loggableToken))
+            {
+                parts.Add("loggableToken=" + fetchResult.loggableToken);
+            }
+
+            return string.Join(" | ", parts);
+        }
+
         /*
         * Fetches a secure string with the given key. If newDef is not nil then a secure string for
         * the particular app instance may be defined. In this case the new value is returned as the
@@ -801,7 +862,7 @@ namespace Approov
             LogTrace(TAG + "FetchSecureString start type=" + type + " key=" + key);
 
             ApproovTokenFetchResult fetchResult = ApproovBridge.FetchSecureStringAndWait(key, newDef);
-            Console.WriteLine(TAG + "FetchSecureString: " + type + " " + ApproovTokenFetchStatusToString(fetchResult.status));
+            LogTrace(TAG + "FetchSecureString: " + type + " " + ApproovTokenFetchStatusToString(fetchResult.status));
             GetServiceMutator().HandleFetchSecureStringResult(fetchResult, type, key);
             return fetchResult.secureString;
         }//FetchSecureString
@@ -825,10 +886,10 @@ namespace Approov
             fetchResult = ApproovBridge.FetchCustomJWTAndWait(payload);
             aCurrentFetchStatus = fetchResult.status;
             } catch (Exception e) {
-                Console.WriteLine(TAG + "FetchCustomJWT: " + e.Message);
+                LogWarning(TAG + "FetchCustomJWT: " + e.Message);
                 throw new PermanentException(TAG + "FetchCustomJWT: " + e.Message);
             }
-            Console.WriteLine(TAG + "FetchCustomJWT: " + ApproovTokenFetchStatusToString((ApproovTokenFetchStatus)aCurrentFetchStatus));
+            LogTrace(TAG + "FetchCustomJWT: " + ApproovTokenFetchStatusToString((ApproovTokenFetchStatus)aCurrentFetchStatus));
 
             GetServiceMutator().HandleFetchCustomJwtResult(fetchResult);
             return fetchResult.token;
@@ -850,7 +911,7 @@ namespace Approov
             // Get loggable token and print
             string loggableToken = fetchResult.loggableToken;
             
-            Console.WriteLine(TAG + "Precheck " + loggableToken);
+            LogTrace(TAG + "Precheck " + loggableToken);
         }// Precheck
 
         /**
@@ -865,7 +926,7 @@ namespace Approov
             EnsureSDKInitialized("GetDeviceID");
             LogTrace(TAG + "GetDeviceID start");
             string deviceID = ApproovBridge.GetDeviceID();
-            Console.WriteLine(TAG + "DeviceID: " + deviceID);
+            LogTrace(TAG + "DeviceID: " + deviceID);
             return deviceID;
         }
 
@@ -881,7 +942,7 @@ namespace Approov
         public static void SetDataHashInToken(string data)
         {
             LogTrace(TAG + "SetDataHashInToken valueLength=" + (data?.Length ?? 0));
-            Console.WriteLine(TAG + "SetDataHashInToken");
+            LogTrace(TAG + "SetDataHashInToken");
             ApproovBridge.SetDataHashInToken(data);
         }
 
@@ -907,7 +968,6 @@ namespace Approov
         {
             EnsureSDKInitialized("GetAccountMessageSignature");
             LogTrace(TAG + "GetAccountMessageSignature start messageLength=" + (message?.Length ?? 0));
-            Console.WriteLine(TAG + "GetAccountMessageSignature");
             string signature = ApproovBridge.GetAccountMessageSignature(message);
             if (string.IsNullOrWhiteSpace(signature))
             {
@@ -921,7 +981,6 @@ namespace Approov
         {
             EnsureSDKInitialized("GetInstallMessageSignature");
             LogTrace(TAG + "GetInstallMessageSignature start messageLength=" + (message?.Length ?? 0));
-            Console.WriteLine(TAG + "GetInstallMessageSignature");
             string signature = ApproovBridge.GetInstallMessageSignature(message);
             if (string.IsNullOrWhiteSpace(signature))
             {
@@ -953,7 +1012,7 @@ namespace Approov
             ApproovTokenFetchStatus aCurrentFetchStatus = fetchResult.status;
 
             // Process the result
-            Console.WriteLine(TAG + "FetchToken: " + url + " " + ApproovTokenFetchStatusToString(aCurrentFetchStatus));
+            LogTrace(TAG + "FetchToken: " + url + " " + ApproovTokenFetchStatusToString(aCurrentFetchStatus));
             GetServiceMutator().HandleFetchTokenResult(fetchResult);
             return fetchResult.token;
         }// FetchToken
@@ -1009,6 +1068,7 @@ namespace Approov
         * @param key is the development key value to be set, which may be null
         */
         public static void SetDevKey(string key) {
+            LogTrace(TAG + "SetDevKey called keyPresent=" + !string.IsNullOrWhiteSpace(key) + " sdkInitialized=" + IsSDKInitialized());
             ApproovBridge.SetDevKey(key);
         }
 

@@ -85,6 +85,30 @@ namespace Approov.Tests
         }
 
         [Test]
+        public void HandleProcessedRequest_CanIncludeOptionalApiKeyHeader()
+        {
+            HttpRequestMessage request = new(HttpMethod.Get, "https://api.example.com/v5/shapes/");
+            request.Headers.TryAddWithoutValidation("Approov-Token", "token-value");
+            request.Headers.TryAddWithoutValidation("Api-Key", "api-key-value");
+
+            StubSigner signer = new StubSigner();
+            signer.SetDefaultFactory(
+                ApproovDefaultMessageSigning.GenerateDefaultSignatureParametersFactory()
+                    .AddOptionalHeaders("Api-Key"));
+
+            ApproovRequestContext context = ApproovRequestContext.Create(request);
+            signer.HandleProcessedRequest(context, new ApproovRequestMutations
+            {
+                TokenHeaderKey = "Approov-Token"
+            });
+
+            string signatureInput = request.Headers.GetValues("Signature-Input").Single();
+
+            StringAssert.Contains("\"api-key\"", signatureInput);
+            StringAssert.Contains("\"api-key\": api-key-value", signer.LastMessage);
+        }
+
+        [Test]
         public void SerializeDictionary_OmitsEqualsForBareBooleanTrue()
         {
             string serialized = StructuredFieldValueSerializer.SerializeDictionary(new List<KeyValuePair<string, StructuredFieldItem>>

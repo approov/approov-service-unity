@@ -1,7 +1,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 using Approov;
 using UnityEngine;
@@ -12,17 +14,31 @@ public class ShapesApp : MonoBehaviour
 {
     private const string ShapesHost = "https://shapes.approov.io/";
     private const string ApiKey = "yXClypapWNHIifHUWmBIyPFAm";
+    private const string DefaultApproovDevKey = "l_zPzVpmXN8oKwQ-";
+    private const string DiagnosticsFileName = "approov-shapes-diagnostics.log";
+    private const string SampleLogTag = "ShapesApp";
+    private const int HttpTimeoutSeconds = 20;
+    private const int MaxVisibleLogLines = 10;
+
+    private static readonly bool[] ApproovModes =
+    {
+        false,
+        true
+    };
+
     private static readonly ShapesTransportMode[] TransportModes =
     {
         ShapesTransportMode.UnityWebRequest,
         ShapesTransportMode.HttpClient
     };
+
     private static readonly ShapesEndpointVersion[] EndpointModes =
     {
         ShapesEndpointVersion.V1,
         ShapesEndpointVersion.V3,
         ShapesEndpointVersion.V5
     };
+
     private static readonly ShapesSignatureMode[] SignatureModes =
     {
         ShapesSignatureMode.None,
@@ -76,10 +92,21 @@ public class ShapesApp : MonoBehaviour
 
     private sealed class SampleRequestResult
     {
+        public string Diagnostics;
         public string Error;
         public bool IsSuccess;
         public string ResponseBody;
         public long StatusCode;
+    }
+
+    private sealed class AutoTestScenario
+    {
+        public bool ApproovEnabled;
+        public ShapesEndpointVersion Endpoint;
+        public string Label;
+        public RequestKind RequestKind;
+        public ShapesSignatureMode SignatureMode;
+        public ShapesTransportMode Transport;
     }
 
     private sealed class ShapesMessageSigningMutator : ApproovServiceMutator
@@ -110,7 +137,17 @@ public class ShapesApp : MonoBehaviour
 
         public override bool HandleInterceptorFetchTokenResult(ApproovRequestContext request, ApproovTokenFetchResult approovResult)
         {
-            return ApproovServiceMutator.Default.HandleInterceptorFetchTokenResult(request, approovResult);
+            try
+            {
+                bool shouldApply = ApproovServiceMutator.Default.HandleInterceptorFetchTokenResult(request, approovResult);
+                _owner?.HandleApproovFetchResult(request, approovResult, shouldApply, null);
+                return shouldApply;
+            }
+            catch (Exception exception)
+            {
+                _owner?.HandleApproovFetchResult(request, approovResult, false, exception.Message);
+                throw;
+            }
         }
 
         public override bool HandleHeaderSubstitutionResult(ApproovRequestContext request, ApproovTokenFetchResult approovResult, string header)
@@ -179,14 +216,27 @@ public class ShapesApp : MonoBehaviour
     [SerializeField] private ShapesTransportMode defaultTransport = ShapesTransportMode.UnityWebRequest;
     [SerializeField] private ShapesEndpointVersion defaultEndpoint = ShapesEndpointVersion.V3;
     [SerializeField] private ShapesSignatureMode defaultSignatureMode = ShapesSignatureMode.Install;
+    [SerializeField] private bool enableDetailedServiceLogging = true;
+    [SerializeField] private bool useApproovDevKey = true;
+    [SerializeField] private string approovDevKey = DefaultApproovDevKey;
 
+    private readonly Dictionary<string, Sprite> _imageSprites = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Texture2D> _images = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _persistentLogLock = new();
+    private readonly List<string> _screenLogLines = new();
+
+    private int _activeRequestId;
+    private Button _autoTestButton;
     private Text _currentConfigText;
     private Text _endpointDescriptionText;
+    private Text _logText;
+    private bool _isAutoTestRunning;
     private bool _isRequestInFlight;
+    private string _logFilePath;
     private ShapesMessageSigningMutator _messageSigningMutator;
     private string _approovInitializationError;
     private Dropdown _endpointDropdown;
+    private int _requestSequence;
     private Toggle _approovToggle;
     private Dropdown _signatureDropdown;
     private Dropdown _transportDropdown;
@@ -203,6 +253,9 @@ public class ShapesApp : MonoBehaviour
             throw new InvalidOperationException("Shapes sample scene is missing one or more required UI references.");
         }
 
+        InitializePersistentLogging();
+        ApproovService.SetDetailedDebugLogging(enableDetailedServiceLogging);
+        LogConfiguredDevKeyState();
         helloButton.onClick.AddListener(OnHelloButtonClicked);
         shapesButton.onClick.AddListener(OnShapesButtonClicked);
 
@@ -211,14 +264,102 @@ public class ShapesApp : MonoBehaviour
         ApplyDefaultSelections();
 
         SelectImage("approov");
-        statusText.text = "Choose a transport and endpoint, then press Hello or Get Shape.";
+        statusText.text = "Choose a transport and endpoint, then press Hello, Get Shape, or Run Auto Test.";
+
+        ClearScreenLog();
+        LogSample("Sample started on " + Application.platform + ". Detailed service logging is " +
+                  (enableDetailedServiceLogging ? "enabled." : "disabled."));
+        LogSample("Persistent diagnostics log: " + _logFilePath);
 
         RefreshConfigurationUi();
         ApplyMutatorConfiguration();
     }
 
+    private void LogConfiguredDevKeyState()
+    {
+        if (!IsDevKeyConfigured())
+        {
+            LogSample("Approov dev key disabled for this sample build.");
+            return;
+        }
+
+        LogSample("Approov dev key configured for this sample build and will be applied after SDK initialization.");
+    }
+
+    private void ApplyConfiguredDevKey()
+    {
+        if (!IsDevKeyConfigured())
+        {
+            return;
+        }
+
+        ApproovService.SetDevKey(approovDevKey);
+        LogSample("Approov dev key configured for this sample build. sdkInitialized=" + ApproovService.IsSDKInitialized());
+    }
+
+    private bool IsDevKeyConfigured()
+    {
+        return useApproovDevKey && !string.IsNullOrWhiteSpace(approovDevKey);
+    }
+
+    private void InitializePersistentLogging()
+    {
+        _logFilePath = Path.Combine(Application.persistentDataPath, DiagnosticsFileName);
+        Application.logMessageReceivedThreaded -= HandleUnityLogMessage;
+        Application.logMessageReceivedThreaded += HandleUnityLogMessage;
+
+        try
+        {
+            string sessionHeader =
+                "===== Shapes diagnostics session " + DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ") +
+                " | platform=" + Application.platform +
+                " | unity=" + Application.unityVersion +
+                " | persistentDataPath=" + Application.persistentDataPath + " =====";
+            AppendPersistentLogLine(sessionHeader);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning("[" + SampleLogTag + "] Failed to initialize persistent logging: " + exception.Message);
+        }
+    }
+
+    private void HandleUnityLogMessage(string condition, string stackTrace, LogType type)
+    {
+        if (string.IsNullOrWhiteSpace(_logFilePath))
+        {
+            return;
+        }
+
+        string header = "[" + DateTime.UtcNow.ToString("HH:mm:ss.fff") + "] [" + type + "] " + condition;
+        AppendPersistentLogLine(header);
+        if (!string.IsNullOrWhiteSpace(stackTrace))
+        {
+            AppendPersistentLogLine(stackTrace);
+        }
+    }
+
+    private void AppendPersistentLogLine(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message) || string.IsNullOrWhiteSpace(_logFilePath))
+        {
+            return;
+        }
+
+        try
+        {
+            lock (_persistentLogLock)
+            {
+                File.AppendAllText(_logFilePath, message + Environment.NewLine);
+            }
+        }
+        catch
+        {
+        }
+    }
+
     private void OnDestroy()
     {
+        Application.logMessageReceivedThreaded -= HandleUnityLogMessage;
         ApproovService.SetServiceMutator(ApproovServiceMutator.Default);
     }
 
@@ -232,55 +373,232 @@ public class ShapesApp : MonoBehaviour
         StartRequest(RequestKind.Shapes);
     }
 
-    private void StartRequest(RequestKind requestKind)
+    private void OnAutoTestButtonClicked()
     {
-        if (_isRequestInFlight)
+        if (_isRequestInFlight || _isAutoTestRunning)
         {
             return;
         }
 
+        StartCoroutine(RunAutoTestCoroutine());
+    }
+
+    private void StartRequest(RequestKind requestKind)
+    {
+        if (_isRequestInFlight || _isAutoTestRunning)
+        {
+            return;
+        }
+
+        StartCoroutine(RunInteractiveRequestCoroutine(requestKind));
+    }
+
+    private IEnumerator RunInteractiveRequestCoroutine(RequestKind requestKind)
+    {
+        int requestId = NextRequestId();
+        ShapesEndpointMetadata metadata = GetEndpointMetadata(GetSelectedEndpoint());
+        if (!PrepareRequestForExecution(out string initError))
+        {
+            string message = "Approov initialization failed: " + initError;
+            statusText.text = message;
+            SelectImage("confused");
+            LogSampleWarning(message);
+            yield break;
+        }
+
+        BeginRequest(requestId, requestKind, null);
+        LogOutgoingRequest(requestId, "Manual request", requestKind, metadata);
+
+        SampleRequestResult result = null;
+        yield return StartCoroutine(ExecuteCurrentRequestCoroutine(requestKind, value => result = value));
+
+        ApplyRequestResult(requestKind, result);
+        LogRequestResult(requestId, "Manual request complete", requestKind, result);
+        EndRequest();
+    }
+
+    private IEnumerator RunAutoTestCoroutine()
+    {
+        bool previousApproovEnabled = IsApproovEnabled();
+        ShapesTransportMode previousTransport = GetSelectedTransport();
+        ShapesEndpointVersion previousEndpoint = GetSelectedEndpoint();
+        ShapesSignatureMode previousSignature = GetSelectedSignatureMode();
+
+        _isAutoTestRunning = true;
+        UpdateInteractiveState();
+        ClearScreenLog();
+        SelectImage("approov");
+        statusText.text = "Running automated Shapes scenarios...";
+
+        List<AutoTestScenario> scenarios = BuildAutoTestScenarios();
+        bool approovRuntimeSupported = IsApproovRuntimeSupported();
+        bool approovInitializationAttempted = false;
+        bool approovInitializationSucceeded = ApproovService.IsSDKInitialized();
+        string approovInitializationError = _approovInitializationError;
+
+        int passed = 0;
+        int failed = 0;
+        int skipped = 0;
+
+        LogSample("Auto test started with " + scenarios.Count + " scenarios.");
+
+        for (int index = 0; index < scenarios.Count; index++)
+        {
+            int requestId = NextRequestId();
+            AutoTestScenario scenario = scenarios[index];
+            SetSelectionsWithoutNotify(
+                scenario.ApproovEnabled,
+                scenario.Transport,
+                scenario.Endpoint,
+                scenario.SignatureMode);
+            RefreshConfigurationUi();
+
+            if (scenario.ApproovEnabled && !ApproovService.IsSDKInitialized() && !approovInitializationAttempted)
+            {
+                approovInitializationAttempted = true;
+                approovInitializationSucceeded = EnsureApproovInitialized();
+                approovInitializationError = _approovInitializationError;
+            }
+
+            if (scenario.ApproovEnabled && !approovInitializationSucceeded)
+            {
+                bool shouldSkip = !approovRuntimeSupported;
+                string reason = shouldSkip
+                    ? "Approov scenarios are skipped because native initialization is only available on Android and iOS player builds."
+                    : "Approov initialization failed: " + approovInitializationError;
+                string summary = BuildAutoTestScenarioSummary(
+                    scenario,
+                    shouldSkip ? "SKIP" : "FAIL",
+                    reason);
+
+                if (shouldSkip)
+                {
+                    skipped++;
+                    LogSampleWarning(summary);
+                }
+                else
+                {
+                    failed++;
+                    LogSampleError(summary);
+                }
+
+                continue;
+            }
+
+            ApplyMutatorConfiguration();
+
+            BeginRequest(requestId, scenario.RequestKind, "[" + (index + 1) + "/" + scenarios.Count + "]");
+            LogOutgoingRequest(requestId, "Scenario " + (index + 1) + "/" + scenarios.Count + " " + scenario.Label, scenario.RequestKind, GetEndpointMetadata(scenario.Endpoint));
+
+            SampleRequestResult result = null;
+            yield return StartCoroutine(ExecuteCurrentRequestCoroutine(scenario.RequestKind, value => result = value));
+
+            ApplyRequestResult(scenario.RequestKind, result);
+            EndRequest();
+
+            bool scenarioPassed = EvaluateScenario(scenario, result, out string expectationSummary);
+            string autoTestSummary = BuildAutoTestScenarioSummary(
+                scenario,
+                scenarioPassed ? "PASS" : "FAIL",
+                expectationSummary);
+
+            if (scenarioPassed)
+            {
+                passed++;
+                LogSample(autoTestSummary);
+            }
+            else
+            {
+                failed++;
+                LogSampleError(autoTestSummary);
+            }
+
+            yield return null;
+        }
+
+        SetSelectionsWithoutNotify(previousApproovEnabled, previousTransport, previousEndpoint, previousSignature);
+        ApplyMutatorConfiguration();
+        RefreshConfigurationUi();
+
+        _isAutoTestRunning = false;
+        UpdateInteractiveState();
+
+        string finalSummary = "Auto test complete: " + passed + " passed, " + failed + " failed, " + skipped + " skipped.";
+        statusText.text = finalSummary;
+        LogSample(finalSummary);
+    }
+
+    private bool PrepareRequestForExecution(out string initError)
+    {
+        initError = null;
         if (IsApproovEnabled() && !EnsureApproovInitialized())
         {
-            string initError = string.IsNullOrWhiteSpace(_approovInitializationError)
+            initError = string.IsNullOrWhiteSpace(_approovInitializationError)
                 ? "Approov initialization did not complete successfully."
                 : _approovInitializationError;
-            statusText.text = "Approov initialization failed: " + initError;
-            SelectImage("confused");
-            return;
+            return false;
         }
 
         ApplyMutatorConfiguration();
-        BeginRequest(requestKind);
-
-        if (GetSelectedTransport() == ShapesTransportMode.HttpClient)
-        {
-            _ = SendHttpClientRequestAsync(requestKind);
-        }
-        else
-        {
-            StartCoroutine(SendUnityWebRequestCoroutine(requestKind));
-        }
+        return true;
     }
 
-    private void BeginRequest(RequestKind requestKind)
+    private void BeginRequest(int requestId, RequestKind requestKind, string contextLabel)
     {
+        _activeRequestId = requestId;
         _isRequestInFlight = true;
-        SetInteractiveState(false);
-        statusText.text = "Sending " + GetRequestKindLabel(requestKind) + " via " + GetTransportLabel(GetSelectedTransport()) + "...";
+        UpdateInteractiveState();
+
+        string prefix = string.IsNullOrWhiteSpace(contextLabel) ? string.Empty : contextLabel + " ";
+        statusText.text = prefix + "[req-" + requestId + "] Sending " + GetRequestKindLabel(requestKind) + " via " + GetTransportLabel(GetSelectedTransport()) + "...";
     }
 
     private void EndRequest()
     {
+        _activeRequestId = 0;
         _isRequestInFlight = false;
-        SetInteractiveState(true);
+        UpdateInteractiveState();
         RefreshConfigurationUi();
     }
 
-    private IEnumerator SendUnityWebRequestCoroutine(RequestKind requestKind)
+    private IEnumerator ExecuteCurrentRequestCoroutine(RequestKind requestKind, Action<SampleRequestResult> onComplete)
+    {
+        SampleRequestResult result = null;
+        if (GetSelectedTransport() == ShapesTransportMode.HttpClient)
+        {
+            Task<SampleRequestResult> task = SendHttpClientRequestAsync(requestKind);
+            while (!task.IsCompleted)
+            {
+                yield return null;
+            }
+
+            result = task.Status == TaskStatus.RanToCompletion
+                ? task.Result
+                : new SampleRequestResult
+                {
+                    IsSuccess = false,
+                    Error = task.Exception == null ? "Unknown HttpClient task failure" : FormatExceptionMessage(task.Exception),
+                    Diagnostics = task.Exception?.ToString(),
+                };
+        }
+        else
+        {
+            yield return StartCoroutine(SendUnityWebRequestCoroutine(requestKind, value => result = value));
+        }
+
+        onComplete?.Invoke(result ?? new SampleRequestResult
+        {
+            IsSuccess = false,
+            Error = "No request result was produced.",
+        });
+    }
+
+    private IEnumerator SendUnityWebRequestCoroutine(RequestKind requestKind, Action<SampleRequestResult> onComplete)
     {
         ShapesEndpointMetadata metadata = GetEndpointMetadata(GetSelectedEndpoint());
         UnityWebRequest request = CreateUnityWebRequest(requestKind, metadata);
         UnityWebRequestAsyncOperation operation;
+
         try
         {
             operation = IsApproovEnabled()
@@ -290,12 +608,12 @@ public class ShapesApp : MonoBehaviour
         catch (Exception exception)
         {
             request.Dispose();
-            ApplyRequestResult(requestKind, new SampleRequestResult
+            onComplete?.Invoke(new SampleRequestResult
             {
                 IsSuccess = false,
-                Error = exception.Message,
+                Error = FormatExceptionMessage(exception),
+                Diagnostics = exception.ToString(),
             });
-            EndRequest();
             yield break;
         }
 
@@ -303,45 +621,50 @@ public class ShapesApp : MonoBehaviour
 
         SampleRequestResult result = BuildUnityWebRequestResult(request);
         request.Dispose();
-
-        ApplyRequestResult(requestKind, result);
-        EndRequest();
+        onComplete?.Invoke(result);
     }
 
-    private async Task SendHttpClientRequestAsync(RequestKind requestKind)
+    private async Task<SampleRequestResult> SendHttpClientRequestAsync(RequestKind requestKind)
     {
         ShapesEndpointMetadata metadata = GetEndpointMetadata(GetSelectedEndpoint());
-        SampleRequestResult result;
 
         try
         {
-            using HttpClient client = IsApproovEnabled()
-                ? ApproovService.CreateHttpClient()
-                : new HttpClient();
+            using HttpClient client = CreateSampleHttpClient();
             using HttpRequestMessage request = CreateHttpRequestMessage(requestKind, metadata);
-            using HttpResponseMessage response = await client.SendAsync(request);
-            string body = response.Content == null ? null : await response.Content.ReadAsStringAsync();
-            result = new SampleRequestResult
+            using HttpResponseMessage response = await client.SendAsync(request).ConfigureAwait(false);
+            string body = response.Content == null ? null : await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+            return new SampleRequestResult
             {
                 IsSuccess = response.IsSuccessStatusCode,
                 StatusCode = (long)response.StatusCode,
                 ResponseBody = body,
                 Error = response.IsSuccessStatusCode ? null : response.ReasonPhrase,
+                Diagnostics = BuildHttpResponseDiagnostics(request, response, body),
             };
         }
         catch (Exception exception)
         {
-            result = new SampleRequestResult
+            return new SampleRequestResult
             {
                 IsSuccess = false,
-                Error = exception.Message,
+                Error = FormatExceptionMessage(exception),
                 ResponseBody = null,
                 StatusCode = 0,
+                Diagnostics = exception.ToString(),
             };
         }
+    }
 
-        ApplyRequestResult(requestKind, result);
-        EndRequest();
+    private HttpClient CreateSampleHttpClient()
+    {
+        HttpClientHandler handler = new();
+        HttpClient client = IsApproovEnabled()
+            ? ApproovService.CreateHttpClient(handler)
+            : new HttpClient(handler, disposeHandler: true);
+        client.Timeout = TimeSpan.FromSeconds(HttpTimeoutSeconds);
+        return client;
     }
 
     private bool LoadImageResources()
@@ -354,12 +677,21 @@ public class ShapesApp : MonoBehaviour
         }
 
         _images.Clear();
+        _imageSprites.Clear();
         foreach (Texture2D texture in textures)
         {
-            if (texture != null && !_images.ContainsKey(texture.name))
+            if (texture == null || _images.ContainsKey(texture.name))
             {
-                _images.Add(texture.name, texture);
+                continue;
             }
+
+            _images.Add(texture.name, texture);
+            _imageSprites.Add(
+                texture.name,
+                Sprite.Create(
+                    texture,
+                    new Rect(0, 0, texture.width, texture.height),
+                    new Vector2(0.5f, 0.5f)));
         }
 
         return _images.Count > 0;
@@ -371,16 +703,18 @@ public class ShapesApp : MonoBehaviour
         imageRect.anchorMin = new Vector2(0.5f, 1f);
         imageRect.anchorMax = new Vector2(0.5f, 1f);
         imageRect.pivot = new Vector2(0.5f, 1f);
-        imageRect.anchoredPosition = new Vector2(0f, -270f);
+        imageRect.anchoredPosition = new Vector2(0f, -470f);
         imageRect.sizeDelta = new Vector2(220f, 180f);
 
         RectTransform statusRect = statusText.rectTransform;
         statusRect.anchorMin = new Vector2(0.5f, 1f);
         statusRect.anchorMax = new Vector2(0.5f, 1f);
         statusRect.pivot = new Vector2(0.5f, 1f);
-        statusRect.anchoredPosition = new Vector2(0f, -480f);
-        statusRect.sizeDelta = new Vector2(360f, 72f);
+        statusRect.anchoredPosition = new Vector2(0f, -670f);
+        statusRect.sizeDelta = new Vector2(360f, 96f);
         statusText.alignment = TextAnchor.UpperCenter;
+        statusText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        statusText.verticalOverflow = VerticalWrapMode.Overflow;
 
         RectTransform buttonsContainer = helloButton.transform.parent as RectTransform;
         if (buttonsContainer != null)
@@ -417,7 +751,7 @@ public class ShapesApp : MonoBehaviour
         panelRect.anchorMax = new Vector2(0.5f, 1f);
         panelRect.pivot = new Vector2(0.5f, 1f);
         panelRect.anchoredPosition = new Vector2(0f, -16f);
-        panelRect.sizeDelta = new Vector2(360f, 230f);
+        panelRect.sizeDelta = new Vector2(380f, 420f);
 
         VerticalLayoutGroup panelLayout = panelObject.AddComponent<VerticalLayoutGroup>();
         panelLayout.padding = new RectOffset(14, 14, 14, 14);
@@ -432,7 +766,7 @@ public class ShapesApp : MonoBehaviour
         panelFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
         _currentConfigText = CreatePanelText(panelObject.transform, 17, FontStyle.Bold, 30f);
-        _endpointDescriptionText = CreatePanelText(panelObject.transform, 13, FontStyle.Normal, 60f);
+        _endpointDescriptionText = CreatePanelText(panelObject.transform, 13, FontStyle.Normal, 70f);
         _endpointDescriptionText.alignment = TextAnchor.UpperLeft;
         _endpointDescriptionText.horizontalOverflow = HorizontalWrapMode.Wrap;
         _endpointDescriptionText.verticalOverflow = VerticalWrapMode.Overflow;
@@ -456,6 +790,13 @@ public class ShapesApp : MonoBehaviour
             new[] { "None", "Install", "Account" },
             OnSignatureDropdownChanged,
             resources);
+        _autoTestButton = CreatePanelButton(panelObject.transform, "Run Auto Test", OnAutoTestButtonClicked, resources);
+        _logText = CreatePanelText(panelObject.transform, 12, FontStyle.Normal, 120f);
+        _logText.alignment = TextAnchor.UpperLeft;
+        _logText.color = new Color(0.87f, 0.92f, 1f, 1f);
+        _logText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        _logText.verticalOverflow = VerticalWrapMode.Overflow;
+        _logText.text = "No activity yet.";
     }
 
     private DefaultControls.Resources CreateDefaultControlResources()
@@ -475,10 +816,19 @@ public class ShapesApp : MonoBehaviour
 
     private void ApplyDefaultSelections()
     {
-        _approovToggle.SetIsOnWithoutNotify(defaultApproovEnabled);
-        _transportDropdown.SetValueWithoutNotify(IndexOf(TransportModes, defaultTransport));
-        _endpointDropdown.SetValueWithoutNotify(IndexOf(EndpointModes, defaultEndpoint));
-        _signatureDropdown.SetValueWithoutNotify(IndexOf(SignatureModes, defaultSignatureMode));
+        SetSelectionsWithoutNotify(defaultApproovEnabled, defaultTransport, defaultEndpoint, defaultSignatureMode);
+    }
+
+    private void SetSelectionsWithoutNotify(
+        bool approovEnabled,
+        ShapesTransportMode transport,
+        ShapesEndpointVersion endpoint,
+        ShapesSignatureMode signature)
+    {
+        _approovToggle.SetIsOnWithoutNotify(approovEnabled);
+        _transportDropdown.SetValueWithoutNotify(IndexOf(TransportModes, transport));
+        _endpointDropdown.SetValueWithoutNotify(IndexOf(EndpointModes, endpoint));
+        _signatureDropdown.SetValueWithoutNotify(IndexOf(SignatureModes, signature));
         _transportDropdown.RefreshShownValue();
         _endpointDropdown.RefreshShownValue();
         _signatureDropdown.RefreshShownValue();
@@ -523,9 +873,57 @@ public class ShapesApp : MonoBehaviour
             labelText.text = label;
         }
 
+        StyleToggleVisuals(toggleObject, toggle);
+
         LayoutElement layoutElement = toggleObject.AddComponent<LayoutElement>();
-        layoutElement.preferredHeight = 28f;
+        layoutElement.preferredHeight = 30f;
         return toggle;
+    }
+
+    private void StyleToggleVisuals(GameObject toggleObject, Toggle toggle)
+    {
+        RectTransform backgroundRect = toggleObject.transform.Find("Background") as RectTransform;
+        if (backgroundRect == null)
+        {
+            return;
+        }
+
+        Image backgroundImage = backgroundRect?.GetComponent<Image>();
+        if (backgroundRect != null)
+        {
+            backgroundRect.sizeDelta = new Vector2(22f, 22f);
+        }
+
+        if (backgroundImage != null)
+        {
+            backgroundImage.color = new Color(0.95f, 0.97f, 1f, 1f);
+        }
+
+        Transform defaultCheckmark = backgroundRect?.Find("Checkmark");
+        if (defaultCheckmark != null)
+        {
+            defaultCheckmark.gameObject.SetActive(false);
+        }
+
+        GameObject checkmarkObject = new GameObject("CheckmarkText", typeof(RectTransform));
+        checkmarkObject.transform.SetParent(backgroundRect, false);
+
+        Text checkmarkText = checkmarkObject.AddComponent<Text>();
+        checkmarkText.font = statusText.font;
+        checkmarkText.text = "✓";
+        checkmarkText.fontSize = 17;
+        checkmarkText.fontStyle = FontStyle.Bold;
+        checkmarkText.alignment = TextAnchor.MiddleCenter;
+        checkmarkText.color = new Color(0.12f, 0.62f, 0.28f, 1f);
+
+        RectTransform checkmarkRect = checkmarkText.rectTransform;
+        checkmarkRect.anchorMin = Vector2.zero;
+        checkmarkRect.anchorMax = Vector2.one;
+        checkmarkRect.offsetMin = Vector2.zero;
+        checkmarkRect.offsetMax = Vector2.zero;
+
+        toggle.targetGraphic = backgroundImage;
+        toggle.graphic = checkmarkText;
     }
 
     private Dropdown CreateDropdownRow(
@@ -563,9 +961,9 @@ public class ShapesApp : MonoBehaviour
 
         Dropdown dropdown = dropdownObject.GetComponent<Dropdown>();
         dropdown.options.Clear();
-        for (int i = 0; i < options.Count; i++)
+        for (int index = 0; index < options.Count; index++)
         {
-            dropdown.options.Add(new Dropdown.OptionData(options[i]));
+            dropdown.options.Add(new Dropdown.OptionData(options[index]));
         }
 
         dropdown.onValueChanged.RemoveAllListeners();
@@ -588,53 +986,152 @@ public class ShapesApp : MonoBehaviour
             text.color = new Color(0.15f, 0.15f, 0.15f, 1f);
         }
 
-        Transform templateTransform = dropdownObject.transform.Find("Template");
-        if (templateTransform != null)
-        {
-            Image templateImage = templateTransform.GetComponent<Image>();
-            if (templateImage != null)
-            {
-                templateImage.color = new Color(0.95f, 0.97f, 1f, 0.98f);
-            }
-
-            Transform scrollbarTransform = templateTransform.Find("Scrollbar");
-            if (scrollbarTransform != null)
-            {
-                scrollbarTransform.gameObject.SetActive(false);
-            }
-
-            RectTransform viewport = templateTransform.Find("Viewport") as RectTransform;
-            if (viewport != null)
-            {
-                viewport.offsetMin = Vector2.zero;
-                viewport.offsetMax = Vector2.zero;
-            }
-
-            templateTransform.gameObject.SetActive(false);
-        }
-
+        StyleDropdownVisuals(dropdownObject, dropdown);
         return dropdown;
     }
 
-    private void OnApproovToggleChanged(bool _)
+    private void StyleDropdownVisuals(GameObject dropdownObject, Dropdown dropdown)
     {
+        Transform arrowTransform = dropdownObject.transform.Find("Arrow");
+        if (arrowTransform != null)
+        {
+            Image arrowImage = arrowTransform.GetComponent<Image>();
+            if (arrowImage != null)
+            {
+                arrowImage.enabled = false;
+            }
+
+            GameObject arrowTextObject = new GameObject("ArrowText", typeof(RectTransform));
+            arrowTextObject.transform.SetParent(arrowTransform, false);
+            Text arrowText = arrowTextObject.AddComponent<Text>();
+            arrowText.font = statusText.font;
+            arrowText.text = "▼";
+            arrowText.fontSize = 12;
+            arrowText.fontStyle = FontStyle.Bold;
+            arrowText.alignment = TextAnchor.MiddleCenter;
+            arrowText.color = new Color(0.19f, 0.26f, 0.38f, 1f);
+
+            RectTransform arrowTextRect = arrowText.rectTransform;
+            arrowTextRect.anchorMin = Vector2.zero;
+            arrowTextRect.anchorMax = Vector2.one;
+            arrowTextRect.offsetMin = Vector2.zero;
+            arrowTextRect.offsetMax = Vector2.zero;
+        }
+
+        Transform templateTransform = dropdownObject.transform.Find("Template");
+        if (templateTransform == null)
+        {
+            return;
+        }
+
+        Image templateImage = templateTransform.GetComponent<Image>();
+        if (templateImage != null)
+        {
+            templateImage.color = new Color(0.95f, 0.97f, 1f, 0.98f);
+        }
+
+        Transform scrollbarTransform = templateTransform.Find("Scrollbar");
+        if (scrollbarTransform != null)
+        {
+            scrollbarTransform.gameObject.SetActive(false);
+        }
+
+        RectTransform viewport = templateTransform.Find("Viewport") as RectTransform;
+        if (viewport != null)
+        {
+            viewport.offsetMin = Vector2.zero;
+            viewport.offsetMax = Vector2.zero;
+        }
+
+        Transform itemTransform = templateTransform.Find("Viewport/Content/Item");
+        if (itemTransform != null)
+        {
+            Image itemBackground = itemTransform.Find("Item Background")?.GetComponent<Image>();
+            if (itemBackground != null)
+            {
+                itemBackground.color = new Color(1f, 1f, 1f, 0.96f);
+            }
+
+            Image itemCheckmark = itemTransform.Find("Item Checkmark")?.GetComponent<Image>();
+            if (itemCheckmark != null)
+            {
+                itemCheckmark.color = new Color(0.16f, 0.58f, 0.31f, 1f);
+            }
+
+            Text itemLabel = itemTransform.Find("Item Label")?.GetComponent<Text>();
+            if (itemLabel != null)
+            {
+                itemLabel.font = statusText.font;
+                itemLabel.fontSize = 13;
+                itemLabel.color = new Color(0.15f, 0.15f, 0.15f, 1f);
+            }
+        }
+
+        templateTransform.gameObject.SetActive(false);
+    }
+
+    private Button CreatePanelButton(Transform parent, string label, Action onClick, DefaultControls.Resources resources)
+    {
+        GameObject buttonObject = DefaultControls.CreateButton(resources);
+        buttonObject.name = label.Replace(" ", string.Empty);
+        buttonObject.transform.SetParent(parent, false);
+
+        Button button = buttonObject.GetComponent<Button>();
+        button.onClick.RemoveAllListeners();
+        button.onClick.AddListener(() => onClick());
+
+        Text buttonText = buttonObject.GetComponentInChildren<Text>(true);
+        if (buttonText != null)
+        {
+            buttonText.font = statusText.font;
+            buttonText.fontSize = 14;
+            buttonText.fontStyle = FontStyle.Bold;
+            buttonText.color = Color.white;
+            buttonText.text = label;
+        }
+
+        Image buttonImage = buttonObject.GetComponent<Image>();
+        if (buttonImage != null)
+        {
+            buttonImage.color = new Color(0.18f, 0.44f, 0.78f, 1f);
+        }
+
+        ColorBlock colors = button.colors;
+        colors.normalColor = new Color(0.18f, 0.44f, 0.78f, 1f);
+        colors.highlightedColor = new Color(0.24f, 0.53f, 0.89f, 1f);
+        colors.pressedColor = new Color(0.11f, 0.34f, 0.64f, 1f);
+        colors.selectedColor = colors.highlightedColor;
+        colors.disabledColor = new Color(0.32f, 0.36f, 0.42f, 0.75f);
+        button.colors = colors;
+
+        LayoutElement layoutElement = buttonObject.AddComponent<LayoutElement>();
+        layoutElement.preferredHeight = 36f;
+        return button;
+    }
+
+    private void OnApproovToggleChanged(bool value)
+    {
+        LogSample("Approov toggled " + (value ? "on." : "off."));
         ApplyMutatorConfiguration();
         RefreshConfigurationUi();
     }
 
     private void OnTransportDropdownChanged(int _)
     {
+        LogSample("Transport changed to " + GetTransportLabel(GetSelectedTransport()) + ".");
         RefreshConfigurationUi();
     }
 
     private void OnEndpointDropdownChanged(int _)
     {
+        LogSample("Endpoint changed to " + GetEndpointMetadata(GetSelectedEndpoint()).Title + ".");
         ApplyMutatorConfiguration();
         RefreshConfigurationUi();
     }
 
     private void OnSignatureDropdownChanged(int _)
     {
+        LogSample("Signature mode changed to " + GetSelectedSignatureMode() + ".");
         ApplyMutatorConfiguration();
         RefreshConfigurationUi();
     }
@@ -643,7 +1140,7 @@ public class ShapesApp : MonoBehaviour
     {
         ShapesEndpointMetadata metadata = GetEndpointMetadata(GetSelectedEndpoint());
         _endpointDescriptionText.text = metadata.Description;
-        _signatureDropdown.interactable = !_isRequestInFlight && metadata.SupportsMessageSigning;
+        _signatureDropdown.interactable = !_isRequestInFlight && !_isAutoTestRunning && metadata.SupportsMessageSigning;
 
         string approovState = IsApproovEnabled() ? "Approov On" : "Approov Off";
         if (IsApproovEnabled() && !ApproovService.IsSDKInitialized() && !string.IsNullOrWhiteSpace(_approovInitializationError))
@@ -666,12 +1163,6 @@ public class ShapesApp : MonoBehaviour
             return;
         }
 
-        if (GetEffectiveSignatureMode() == ShapesSignatureMode.None)
-        {
-            ApproovService.SetServiceMutator(ApproovServiceMutator.Default);
-            return;
-        }
-
         _messageSigningMutator ??= new ShapesMessageSigningMutator(this);
         ApproovService.SetServiceMutator(_messageSigningMutator);
     }
@@ -680,6 +1171,7 @@ public class ShapesApp : MonoBehaviour
     {
         if (ApproovService.IsSDKInitialized())
         {
+            ApplyConfiguredDevKey();
             _approovInitializationError = null;
             return true;
         }
@@ -687,11 +1179,12 @@ public class ShapesApp : MonoBehaviour
         try
         {
             ApproovService.Initialize();
+            ApplyConfiguredDevKey();
         }
         catch (Exception exception)
         {
             _approovInitializationError = exception.Message;
-            Debug.LogWarning("Shapes sample failed to initialize Approov: " + exception.Message);
+            LogSampleWarning("Approov initialization failed: " + exception.Message);
             return false;
         }
 
@@ -703,6 +1196,7 @@ public class ShapesApp : MonoBehaviour
         }
 
         _approovInitializationError = null;
+        LogSample("Approov initialization succeeded. Dev key configured=" + IsDevKeyConfigured());
         return true;
     }
 
@@ -719,8 +1213,8 @@ public class ShapesApp : MonoBehaviour
                     RequiresApproov = false,
                     SupportsMessageSigning = false,
                     Description =
-                        "v1 demonstrates the baseline API-key-protected Shapes endpoint. " +
-                        "Hello is public. Shapes requires the Api-Key header and succeeds without Approov.",
+                        "v1 is the baseline API-key-protected endpoint. " +
+                        "Hello is public and Shapes succeeds with only the Api-Key header.",
                 };
             case ShapesEndpointVersion.V3:
                 return new ShapesEndpointMetadata
@@ -731,8 +1225,8 @@ public class ShapesApp : MonoBehaviour
                     RequiresApproov = true,
                     SupportsMessageSigning = false,
                     Description =
-                        "v3 demonstrates Approov token enforcement. " +
-                        "Hello remains a public health check. Shapes requires an Approov token and does not use Api-Key.",
+                        "v3 currently requires an Approov token for Shapes and does not require the Api-Key header. " +
+                        "Hello remains a public health check.",
                 };
             default:
                 return new ShapesEndpointMetadata
@@ -743,8 +1237,8 @@ public class ShapesApp : MonoBehaviour
                     RequiresApproov = true,
                     SupportsMessageSigning = true,
                     Description =
-                        "v5 demonstrates the signature-validation flow. " +
-                        "Shapes sends Api-Key plus an Approov token, and this sample can add install or account message signatures on the protected Shapes request.",
+                        "v5 currently requires both Api-Key and Approov for Shapes. " +
+                        "With no signature the backend should reject the request with a message-signature error; install or account signing should only be sent on the protected Shapes call.",
                 };
         }
     }
@@ -758,13 +1252,18 @@ public class ShapesApp : MonoBehaviour
 
     private HttpRequestMessage CreateHttpRequestMessage(RequestKind requestKind, ShapesEndpointMetadata metadata)
     {
-        HttpRequestMessage request = new(HttpMethod.Get, BuildEndpointUrl(metadata, requestKind));
+        HttpRequestMessage request = new(HttpMethod.Get, BuildEndpointUrl(metadata, requestKind))
+        {
+            Version = new Version(1, 1),
+        };
         ApplyCommonHeaders(requestKind, metadata, (header, value) => request.Headers.TryAddWithoutValidation(header, value));
         return request;
     }
 
     private void ApplyCommonHeaders(RequestKind requestKind, ShapesEndpointMetadata metadata, Action<string, string> addHeader)
     {
+        addHeader("Accept", "application/json");
+
         if (requestKind == RequestKind.Shapes && metadata.RequiresApiKey)
         {
             addHeader("Api-Key", ApiKey);
@@ -816,20 +1315,14 @@ public class ShapesApp : MonoBehaviour
         }
         catch (Exception exception)
         {
-            Debug.LogWarning("Shapes sample failed to parse response: " + exception.Message);
+            LogSampleWarning("Failed to parse Shapes response: " + exception.Message);
             return null;
         }
     }
 
     private string BuildErrorMessage(SampleRequestResult result)
     {
-        ShapesApiResponse response = TryParseResponse(result.ResponseBody);
-        string message = !string.IsNullOrWhiteSpace(response?.status)
-            ? response.status
-            : !string.IsNullOrWhiteSpace(result.ResponseBody)
-                ? result.ResponseBody
-                : result.Error;
-
+        string message = GetResultMessage(result);
         if (string.IsNullOrWhiteSpace(message))
         {
             message = "Unknown request error";
@@ -840,6 +1333,22 @@ public class ShapesApp : MonoBehaviour
             : "Error: " + message;
     }
 
+    private string GetResultMessage(SampleRequestResult result)
+    {
+        ShapesApiResponse response = TryParseResponse(result?.ResponseBody);
+        if (!string.IsNullOrWhiteSpace(response?.status))
+        {
+            return response.status;
+        }
+
+        if (!string.IsNullOrWhiteSpace(result?.Error))
+        {
+            return result.Error;
+        }
+
+        return result?.ResponseBody;
+    }
+
     private SampleRequestResult BuildUnityWebRequestResult(UnityWebRequest request)
     {
         return new SampleRequestResult
@@ -848,21 +1357,65 @@ public class ShapesApp : MonoBehaviour
             StatusCode = request.responseCode,
             ResponseBody = request.downloadHandler?.text,
             Error = request.error,
+            Diagnostics = BuildUnityResponseDiagnostics(request),
         };
+    }
+
+    private static string BuildUnityResponseDiagnostics(UnityWebRequest request)
+    {
+        StringBuilder builder = new();
+        builder.Append(request.method)
+            .Append(' ')
+            .Append(request.url)
+            .Append(" | result=")
+            .Append(request.result)
+            .Append(" | responseCode=")
+            .Append(request.responseCode);
+
+        if (!string.IsNullOrWhiteSpace(request.error))
+        {
+            builder.Append(" | error=").Append(request.error);
+        }
+
+        string body = request.downloadHandler?.text;
+        if (!string.IsNullOrWhiteSpace(body))
+        {
+            builder.Append(" | body=").Append(body);
+        }
+
+        return builder.ToString();
+    }
+
+    private static string BuildHttpResponseDiagnostics(HttpRequestMessage request, HttpResponseMessage response, string body)
+    {
+        StringBuilder builder = new();
+        builder.Append(request.Method)
+            .Append(' ')
+            .Append(request.RequestUri)
+            .Append(" | version=")
+            .Append(response.Version)
+            .Append(" | status=")
+            .Append((int)response.StatusCode)
+            .Append(' ')
+            .Append(response.ReasonPhrase);
+
+        if (!string.IsNullOrWhiteSpace(body))
+        {
+            builder.Append(" | body=").Append(body);
+        }
+
+        return builder.ToString();
     }
 
     private void SelectImage(string imageName)
     {
         string resolvedName = string.IsNullOrWhiteSpace(imageName) ? "confused" : imageName.Trim();
-        if (!_images.TryGetValue(resolvedName, out Texture2D texture))
+        if (!_imageSprites.TryGetValue(resolvedName, out Sprite sprite))
         {
-            texture = _images["confused"];
+            sprite = _imageSprites["confused"];
         }
 
-        shapesImage.sprite = Sprite.Create(
-            texture,
-            new Rect(0, 0, texture.width, texture.height),
-            new Vector2(0.5f, 0.5f));
+        shapesImage.sprite = sprite;
     }
 
     private string ResolveShapeImageName(ShapesApiResponse response)
@@ -913,6 +1466,57 @@ public class ShapesApp : MonoBehaviour
         return string.Equals(request.Uri.AbsolutePath, expectedPath, StringComparison.OrdinalIgnoreCase);
     }
 
+    private bool ShouldRequireApproovToken(ApproovRequestContext request)
+    {
+        if (!IsApproovEnabled() || request?.Uri == null)
+        {
+            return false;
+        }
+
+        ShapesEndpointMetadata metadata = GetEndpointMetadata(GetSelectedEndpoint());
+        if (!metadata.RequiresApproov)
+        {
+            return false;
+        }
+
+        string expectedPath = "/" + metadata.Title.ToLowerInvariant() + "/shapes/";
+        return string.Equals(request.Uri.AbsolutePath, expectedPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void HandleApproovFetchResult(
+        ApproovRequestContext request,
+        ApproovTokenFetchResult approovResult,
+        bool shouldApplyApproovChanges,
+        string failureMessage)
+    {
+        string requestPath = request?.Uri?.AbsoluteUri ?? "(unknown url)";
+        string fetchStatus = ApproovService.ApproovTokenFetchStatusToString(approovResult.status);
+        string fetchDetails = ApproovService.DescribeFetchResult(approovResult);
+        string requestPrefix = _activeRequestId > 0 ? "[req-" + _activeRequestId + "] " : string.Empty;
+        string summary =
+            requestPrefix +
+            "Approov token fetch for " + requestPath +
+            " | applyChanges=" + shouldApplyApproovChanges +
+            " | requiresToken=" + ShouldRequireApproovToken(request) +
+            " | " + fetchDetails;
+
+        if (!string.IsNullOrWhiteSpace(failureMessage))
+        {
+            LogSampleWarning(summary + " | error=" + failureMessage);
+            return;
+        }
+
+        LogSample(summary);
+
+        if (ShouldRequireApproovToken(request) && !shouldApplyApproovChanges)
+        {
+            throw new ConfigurationFailureException(
+                "Approov did not add a token for a request that this sample expects to be protected. " +
+                "Fetch status was " + fetchStatus + ". " +
+                "If this is the v3 Shapes request, verify that the v3 path is protected in your Approov configuration.");
+        }
+    }
+
     private string GetSignatureSummary(ShapesEndpointMetadata metadata)
     {
         if (!metadata.SupportsMessageSigning)
@@ -957,10 +1561,17 @@ public class ShapesApp : MonoBehaviour
         return ValueAt(SignatureModes, _signatureDropdown.value, defaultSignatureMode);
     }
 
-    private void SetInteractiveState(bool interactable)
+    private void UpdateInteractiveState()
     {
+        bool interactable = !_isRequestInFlight && !_isAutoTestRunning;
+
         helloButton.interactable = interactable;
         shapesButton.interactable = interactable;
+
+        if (_autoTestButton != null)
+        {
+            _autoTestButton.interactable = interactable;
+        }
 
         if (_approovToggle != null)
         {
@@ -983,6 +1594,308 @@ public class ShapesApp : MonoBehaviour
         }
     }
 
+    private void LogOutgoingRequest(int requestId, string prefix, RequestKind requestKind, ShapesEndpointMetadata metadata)
+    {
+        string message =
+            "[req-" + requestId + "] " + prefix + " | " +
+            GetRequestKindLabel(requestKind) + " " +
+            BuildEndpointUrl(metadata, requestKind) + " | transport=" +
+            GetTransportLabel(GetSelectedTransport()) + " | approov=" +
+            (IsApproovEnabled() ? "on" : "off") + " | signature=" +
+            GetEffectiveSignatureMode() + " | devKey=" +
+            IsDevKeyConfigured() + " | expected headers=" +
+            BuildExpectedHeaderSummary(requestKind, metadata) + " | config=" +
+            BuildConfigurationSnapshot();
+        LogSample(message);
+    }
+
+    private string BuildExpectedHeaderSummary(RequestKind requestKind, ShapesEndpointMetadata metadata)
+    {
+        List<string> headers = new();
+        if (requestKind == RequestKind.Shapes && metadata.RequiresApiKey)
+        {
+            headers.Add("Api-Key");
+        }
+
+        if (requestKind == RequestKind.Shapes && metadata.RequiresApproov && IsApproovEnabled())
+        {
+            headers.Add("Approov-Token");
+        }
+
+        if (requestKind == RequestKind.Shapes && metadata.SupportsMessageSigning &&
+            IsApproovEnabled() && GetEffectiveSignatureMode() != ShapesSignatureMode.None)
+        {
+            headers.Add(GetEffectiveSignatureMode() + " Signature");
+        }
+
+        return headers.Count == 0 ? "none" : string.Join(", ", headers);
+    }
+
+    private string BuildConfigurationSnapshot()
+    {
+        return
+            "transport=" + GetSelectedTransport() +
+            ", endpoint=" + GetSelectedEndpoint() +
+            ", signature=" + GetSelectedSignatureMode() +
+            ", approovEnabled=" + IsApproovEnabled() +
+            ", sdkInitialized=" + ApproovService.IsSDKInitialized() +
+            ", devKeyEnabled=" + IsDevKeyConfigured();
+    }
+
+    private void LogRequestResult(int requestId, string prefix, RequestKind requestKind, SampleRequestResult result)
+    {
+        string summary = "[req-" + requestId + "] " + prefix + " | " + GetRequestKindLabel(requestKind) + " => " +
+                         (result.IsSuccess ? "success" : "failure") +
+                         " | status=" + result.StatusCode +
+                         " | message=" + GetResultMessage(result);
+
+        if (result.IsSuccess)
+        {
+            LogSample(summary);
+        }
+        else
+        {
+            LogSampleWarning(summary);
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.Diagnostics))
+        {
+            Debug.Log("[" + SampleLogTag + "] Diagnostics: " + result.Diagnostics);
+        }
+    }
+
+    private List<AutoTestScenario> BuildAutoTestScenarios()
+    {
+        List<AutoTestScenario> scenarios = new();
+
+        for (int approovIndex = 0; approovIndex < ApproovModes.Length; approovIndex++)
+        {
+            for (int transportIndex = 0; transportIndex < TransportModes.Length; transportIndex++)
+            {
+                for (int endpointIndex = 0; endpointIndex < EndpointModes.Length; endpointIndex++)
+                {
+                    bool approovEnabled = ApproovModes[approovIndex];
+                    ShapesTransportMode transport = TransportModes[transportIndex];
+                    ShapesEndpointVersion endpoint = EndpointModes[endpointIndex];
+
+                    scenarios.Add(CreateAutoTestScenario(
+                        approovEnabled,
+                        transport,
+                        endpoint,
+                        ShapesSignatureMode.None,
+                        RequestKind.Hello));
+
+                    if (endpoint == ShapesEndpointVersion.V5)
+                    {
+                        for (int signatureIndex = 0; signatureIndex < SignatureModes.Length; signatureIndex++)
+                        {
+                            scenarios.Add(CreateAutoTestScenario(
+                                approovEnabled,
+                                transport,
+                                endpoint,
+                                SignatureModes[signatureIndex],
+                                RequestKind.Shapes));
+                        }
+                    }
+                    else
+                    {
+                        scenarios.Add(CreateAutoTestScenario(
+                            approovEnabled,
+                            transport,
+                            endpoint,
+                            ShapesSignatureMode.None,
+                            RequestKind.Shapes));
+                    }
+                }
+            }
+        }
+
+        return scenarios;
+    }
+
+    private static AutoTestScenario CreateAutoTestScenario(
+        bool approovEnabled,
+        ShapesTransportMode transport,
+        ShapesEndpointVersion endpoint,
+        ShapesSignatureMode signatureMode,
+        RequestKind requestKind)
+    {
+        StringBuilder labelBuilder = new();
+        labelBuilder.Append(GetTransportLabel(transport))
+            .Append(" | ")
+            .Append(approovEnabled ? "Approov On" : "Approov Off")
+            .Append(" | ")
+            .Append(endpoint.ToString().ToLowerInvariant())
+            .Append(" | ")
+            .Append(GetRequestKindLabel(requestKind));
+
+        if (requestKind == RequestKind.Shapes && endpoint == ShapesEndpointVersion.V5)
+        {
+            labelBuilder.Append(" | ").Append(signatureMode).Append(" Signature");
+        }
+
+        return new AutoTestScenario
+        {
+            ApproovEnabled = approovEnabled,
+            Endpoint = endpoint,
+            Label = labelBuilder.ToString(),
+            RequestKind = requestKind,
+            SignatureMode = signatureMode,
+            Transport = transport,
+        };
+    }
+
+    private bool EvaluateScenario(AutoTestScenario scenario, SampleRequestResult result, out string expectationSummary)
+    {
+        string actualMessage = GetResultMessage(result) ?? "no message";
+
+        if (scenario.RequestKind == RequestKind.Hello)
+        {
+            bool passed = result != null && result.IsSuccess && ContainsIgnoreCase(actualMessage, "hello");
+            expectationSummary = passed
+                ? "Expected hello success and received a healthy hello response."
+                : "Expected hello success but got: " + actualMessage;
+            return passed;
+        }
+
+        switch (scenario.Endpoint)
+        {
+            case ShapesEndpointVersion.V1:
+            {
+                bool passed = result != null && result.IsSuccess;
+                expectationSummary = passed
+                    ? "Expected v1 shape success with Api-Key only."
+                    : "Expected v1 shape success but got: " + actualMessage;
+                return passed;
+            }
+            case ShapesEndpointVersion.V3:
+            {
+                if (scenario.ApproovEnabled)
+                {
+                    bool passed = result != null && result.IsSuccess;
+                    expectationSummary = passed
+                        ? "Expected v3 shape success with Approov enabled."
+                        : "Expected v3 shape success but got: " + actualMessage;
+                    return passed;
+                }
+
+                bool failurePassed = result != null && !result.IsSuccess && ContainsIgnoreCase(actualMessage, "approov token");
+                expectationSummary = failurePassed
+                    ? "Expected v3 failure because the Approov token is missing."
+                    : "Expected a missing Approov token error but got: " + actualMessage;
+                return failurePassed;
+            }
+            default:
+            {
+                if (!scenario.ApproovEnabled)
+                {
+                    bool failurePassed = result != null && !result.IsSuccess && ContainsIgnoreCase(actualMessage, "approov token");
+                    expectationSummary = failurePassed
+                        ? "Expected v5 failure because Approov is disabled."
+                        : "Expected a missing Approov token error but got: " + actualMessage;
+                    return failurePassed;
+                }
+
+                if (scenario.SignatureMode == ShapesSignatureMode.None)
+                {
+                    bool signatureFailurePassed = result != null && !result.IsSuccess && ContainsIgnoreCase(actualMessage, "message signature");
+                    expectationSummary = signatureFailurePassed
+                        ? "Expected v5 failure because the request is unsigned."
+                        : "Expected a message-signature failure but got: " + actualMessage;
+                    return signatureFailurePassed;
+                }
+
+                bool successPassed = result != null && result.IsSuccess;
+                expectationSummary = successPassed
+                    ? "Expected v5 shape success with " + scenario.SignatureMode + " signing."
+                    : "Expected v5 shape success with " + scenario.SignatureMode + " signing but got: " + actualMessage;
+                return successPassed;
+            }
+        }
+    }
+
+    private static string BuildAutoTestScenarioSummary(AutoTestScenario scenario, string status, string expectationSummary)
+    {
+        return status + " | " + scenario.Label + " | " + expectationSummary;
+    }
+
+    private void ClearScreenLog()
+    {
+        _screenLogLines.Clear();
+        if (_logText != null)
+        {
+            _logText.text = "No activity yet.";
+        }
+    }
+
+    private void LogSample(string message)
+    {
+        Debug.Log("[" + SampleLogTag + "] " + message);
+        AppendScreenLog(message);
+    }
+
+    private void LogSampleWarning(string message)
+    {
+        Debug.LogWarning("[" + SampleLogTag + "] " + message);
+        AppendScreenLog("WARN: " + message);
+    }
+
+    private void LogSampleError(string message)
+    {
+        Debug.LogError("[" + SampleLogTag + "] " + message);
+        AppendScreenLog("ERROR: " + message);
+    }
+
+    private void AppendScreenLog(string message)
+    {
+        if (_logText == null || string.IsNullOrWhiteSpace(message))
+        {
+            return;
+        }
+
+        string line = DateTime.Now.ToString("HH:mm:ss") + " " + message;
+        _screenLogLines.Add(line);
+        if (_screenLogLines.Count > MaxVisibleLogLines)
+        {
+            _screenLogLines.RemoveAt(0);
+        }
+
+        _logText.text = string.Join("\n", _screenLogLines);
+    }
+
+    private static string FormatExceptionMessage(Exception exception)
+    {
+        if (exception == null)
+        {
+            return null;
+        }
+
+        StringBuilder builder = new();
+        int depth = 0;
+        Exception current = exception;
+        while (current != null && depth < 4)
+        {
+            if (depth > 0)
+            {
+                builder.Append(" | ");
+            }
+
+            builder.Append(current.GetType().Name)
+                .Append(": ")
+                .Append(current.Message);
+            current = current.InnerException;
+            depth++;
+        }
+
+        return builder.ToString();
+    }
+
+    private static bool IsApproovRuntimeSupported()
+    {
+        return Application.platform == RuntimePlatform.Android ||
+               Application.platform == RuntimePlatform.IPhonePlayer;
+    }
+
     private static bool ContainsIgnoreCase(string value, string expected)
     {
         return !string.IsNullOrWhiteSpace(value) &&
@@ -997,6 +1910,12 @@ public class ShapesApp : MonoBehaviour
     private static string GetTransportLabel(ShapesTransportMode transportMode)
     {
         return transportMode == ShapesTransportMode.HttpClient ? "HttpClient" : "UnityWebRequest";
+    }
+
+    private int NextRequestId()
+    {
+        _requestSequence++;
+        return _requestSequence;
     }
 
     private static int IndexOf<T>(IReadOnlyList<T> values, T target)

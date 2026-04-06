@@ -53,7 +53,7 @@ namespace Approov
                 return true;
             }
             // Pr returns an eeror message if the connection should be denied
-            ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: will DENY connection to " + requestUrl + " with error: " + result);
+            ApproovService.LogWarning(TAG + "ApproovCertificateHandler.ValidateCertificate: will DENY connection to " + requestUrl + " with error: " + result);
             return false;
         }
     }

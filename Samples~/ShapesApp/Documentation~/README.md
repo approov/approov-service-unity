@@ -1,6 +1,6 @@
 # Shapes App Sample
 
-This sample demonstrates the Shapes demo backend across both `UnityWebRequest` and `HttpClient`, with runtime controls for Approov, endpoint version, and message-signature mode.
+This sample demonstrates the Shapes demo backend across both `UnityWebRequest` and `HttpClient`, with runtime controls for Approov, endpoint version, message-signature mode, and a built-in automated scenario runner.
 
 ## Setup
 
@@ -26,13 +26,18 @@ The endpoint description shown in the sample UI is based on the observed behavio
 - `Transport`: switch between `UnityWebRequest` and `HttpClient`.
 - `Endpoint`: choose `v1`, `v3`, or `v5`.
 - `Signature`: choose `None`, `Install`, or `Account`. Signature mode is only applied to `v5 /shapes/`.
+- `Run Auto Test`: runs the full supported matrix across transports, endpoint versions, Approov on/off, and the v5 signature modes, then prints expected-versus-actual results in the Unity console and on screen.
 
 When `Signature` is set to `Install` or `Account`, the sample installs a sample-specific mutator that signs only the protected `v5 /shapes/` request. The `Hello` request always stays unsigned so it remains a clean health check.
+
+The sample also enables detailed service-layer trace logging by default so that request mutation, token fetch, signing, and transport errors are visible in the console while you exercise the flows.
+It also writes a persistent diagnostics file named `approov-shapes-diagnostics.log` under `Application.persistentDataPath`, and the sample logs that full path at startup.
 
 ## Expected Demo Flows
 
 - `Approov Off + v1`: `Shapes` should still return a shape because only the API key is required.
 - `Approov Off + v3`: `Shapes` should fail because the Approov token is missing.
 - `Approov On + v3`: `Shapes` should return a shape when the app is correctly configured with Approov.
-- `Approov On + v5 + None`: `Shapes` should fail because the message signature is missing.
+- `Approov Off + v5`: `Shapes` should fail because the Approov token is missing. The sample still sends the `Api-Key` header for v5.
+- `Approov On + v5 + None`: `Shapes` should fail with a message-signature error.
 - `Approov On + v5 + Install` or `Account`: `Shapes` should return a shape when the selected signature type is available and validates successfully.

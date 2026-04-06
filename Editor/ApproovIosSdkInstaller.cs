@@ -16,6 +16,7 @@ namespace Approov.EditorTools
         private const string RepoName = "approov-ios-sdk";
         private const string TargetPath = "Assets/Plugins/iOS/Approov.xcframework";
         private const string InstallerTempRoot = "Temp/ApproovInstaller";
+        private static bool sPromptQueued;
 
         [Serializable]
         private sealed class GitHubAsset
@@ -52,7 +53,7 @@ namespace Approov.EditorTools
         [InitializeOnLoadMethod]
         private static void RegisterPrompt()
         {
-            EditorApplication.delayCall += PromptForMissingIosSdk;
+            QueueMissingIosSdkPrompt();
         }
 
         public static string InstalledVersion => ApproovInstallerState.instance.InstalledIosVersion;
@@ -221,6 +222,35 @@ namespace Approov.EditorTools
                 importer.SetCompatibleWithPlatform(BuildTarget.iOS, true);
                 importer.SaveAndReimport();
             }
+        }
+
+        private static void QueueMissingIosSdkPrompt()
+        {
+            if (sPromptQueued)
+            {
+                return;
+            }
+
+            sPromptQueued = true;
+            EditorApplication.delayCall += TryPromptForMissingIosSdk;
+        }
+
+        private static void TryPromptForMissingIosSdk()
+        {
+            sPromptQueued = false;
+
+            if (Application.isBatchMode)
+            {
+                return;
+            }
+
+            if (BuildPipeline.isBuildingPlayer || EditorApplication.isCompiling || EditorApplication.isUpdating)
+            {
+                QueueMissingIosSdkPrompt();
+                return;
+            }
+
+            PromptForMissingIosSdk();
         }
 
         private static void PromptForMissingIosSdk()

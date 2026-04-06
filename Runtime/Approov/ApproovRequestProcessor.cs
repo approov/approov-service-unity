@@ -50,6 +50,7 @@ namespace Approov
                 }
 
                 ApproovService.SetDataHashInToken(bindingValue);
+                ApproovService.LogTrace("ApproovRequestProcessor bound token to header " + bindingHeader);
             }
 
             ApproovTokenFetchResult approovResult = ApproovBridge.FetchApproovTokenAndWait(requestUrl);
@@ -65,7 +66,9 @@ namespace Approov
                 throw new NetworkingErrorException("ApproovRequestProcessor Forced pin update required", true);
             }
 
-            ApproovService.LogTrace("ApproovRequestProcessor FetchToken: " + requestUrl + " " + ApproovService.ApproovTokenFetchStatusToString(approovResult.status));
+            ApproovService.LogTrace(
+                "ApproovRequestProcessor FetchToken result url=" + requestUrl + " | " +
+                ApproovService.DescribeFetchResult(approovResult));
             if (!mutator.HandleInterceptorFetchTokenResult(request, approovResult))
             {
                 ApproovService.LogTrace("ApproovRequestProcessor mutator allowed request to proceed without Approov changes");
@@ -77,6 +80,10 @@ namespace Approov
             ApplyHeaderSubstitutions(request, mutator, changes);
             ApplyQuerySubstitutions(request, mutator, changes);
 
+            ApproovService.LogTrace(
+                "ApproovRequestProcessor invoking mutator " + mutator +
+                " with tokenHeader=" + (changes.TokenHeaderKey ?? "none") +
+                " traceHeader=" + (changes.TraceIDHeaderKey ?? "none"));
             mutator.HandleProcessedRequest(request, changes);
             ApproovService.LogTrace("ApproovRequestProcessor Apply complete");
         }
@@ -94,6 +101,7 @@ namespace Approov
             {
                 request.SetHeader(tokenHeaderKey, ApproovService.GetTokenPrefix() + tokenValue);
                 changes.TokenHeaderKey = tokenHeaderKey;
+                ApproovService.LogTrace("ApproovRequestProcessor added token header " + tokenHeaderKey);
             }
 
             string traceHeader = ApproovService.GetApproovTraceIDHeader();
@@ -101,6 +109,7 @@ namespace Approov
             {
                 request.SetHeader(traceHeader, approovResult.traceID);
                 changes.TraceIDHeaderKey = traceHeader;
+                ApproovService.LogTrace("ApproovRequestProcessor added trace header " + traceHeader);
             }
         }
 
@@ -137,6 +146,7 @@ namespace Approov
                 request.SetHeader(substitutionHeader.Key, prefix + secureStringResult.secureString);
                 updatedHeaders ??= new List<string>();
                 updatedHeaders.Add(substitutionHeader.Key);
+                ApproovService.LogTrace("ApproovRequestProcessor substituted header " + substitutionHeader.Key);
             }
 
             changes.SubstitutionHeaderKeys = updatedHeaders ?? new List<string>();
@@ -172,6 +182,7 @@ namespace Approov
 
                     updatedKeys ??= new List<string>();
                     updatedKeys.Add(queryParameter);
+                    ApproovService.LogTrace("ApproovRequestProcessor substituted query parameter " + queryParameter);
                     return match.Groups[1].Value + Uri.EscapeDataString(secureStringResult.secureString);
                 });
             }
