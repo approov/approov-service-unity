@@ -1,3 +1,4 @@
+using System;
 using System.Net.Http;
 using System.Net.Security;
 using System.Runtime.CompilerServices;
@@ -15,6 +16,8 @@ namespace Approov
             public string Host;
         }
 
+        private const string CachedUrlPropertyKey = "Approov.AbsoluteUrl";
+        private const string CachedHostPropertyKey = "Approov.Host";
         private static readonly ConditionalWeakTable<HttpRequestMessage, CachedRequestMetadata> CachedRequestMetadataByMessage = new();
 
         public ApproovHttpClientHandler() : this(CreateDefaultInnerHandler())
@@ -77,6 +80,9 @@ namespace Approov
                 AbsoluteUrl = request.RequestUri.AbsoluteUri,
                 Host = request.RequestUri.Host,
             });
+
+            request.Properties[CachedUrlPropertyKey] = request.RequestUri.AbsoluteUri;
+            request.Properties[CachedHostPropertyKey] = request.RequestUri.Host;
         }
 
         private static string GetCachedHost(HttpRequestMessage requestMessage)
@@ -86,11 +92,34 @@ namespace Approov
                 return requestMessage.RequestUri.Host;
             }
 
+            if (requestMessage?.Properties != null &&
+                requestMessage.Properties.TryGetValue(CachedHostPropertyKey, out object cachedHostValue) &&
+                cachedHostValue is string propertyHost &&
+                !string.IsNullOrWhiteSpace(propertyHost))
+            {
+                return propertyHost;
+            }
+
             if (requestMessage != null &&
                 CachedRequestMetadataByMessage.TryGetValue(requestMessage, out CachedRequestMetadata metadata) &&
                 !string.IsNullOrWhiteSpace(metadata.Host))
             {
                 return metadata.Host;
+            }
+
+            string candidate = requestMessage?.RequestUri?.ToString();
+            if (!string.IsNullOrWhiteSpace(candidate))
+            {
+                if (Uri.TryCreate(candidate, UriKind.Absolute, out Uri absoluteUri))
+                {
+                    return absoluteUri.Host;
+                }
+
+                if (!candidate.Contains("://", StringComparison.Ordinal) &&
+                    Uri.TryCreate("https://" + candidate.TrimStart('/'), UriKind.Absolute, out Uri guessedUri))
+                {
+                    return guessedUri.Host;
+                }
             }
 
             return null;
@@ -101,6 +130,14 @@ namespace Approov
             if (requestMessage?.RequestUri != null && requestMessage.RequestUri.IsAbsoluteUri)
             {
                 return requestMessage.RequestUri.AbsoluteUri;
+            }
+
+            if (requestMessage?.Properties != null &&
+                requestMessage.Properties.TryGetValue(CachedUrlPropertyKey, out object cachedUrlValue) &&
+                cachedUrlValue is string propertyUrl &&
+                !string.IsNullOrWhiteSpace(propertyUrl))
+            {
+                return propertyUrl;
             }
 
             if (requestMessage != null &&
@@ -129,15 +166,27 @@ namespace Approov
 
             string host = GetCachedHost(requestMessage);
             string requestUrl = GetCachedUrl(requestMessage);
+            X509Certificate2 certificateToValidate = certificate;
 
-            if (certificate == null || string.IsNullOrWhiteSpace(host))
+            if (certificateToValidate == null &&
+                chain?.ChainElements != null &&
+                chain.ChainElements.Count > 0)
             {
-                ApproovService.LogTrace("ApproovHttpClientHandler ValidateServerCertificate missing certificate or absolute host for " + requestUrl);
+                certificateToValidate = chain.ChainElements[0].Certificate;
+            }
+
+            if (certificateToValidate == null || string.IsNullOrWhiteSpace(host))
+            {
+                ApproovService.LogTrace(
+                    "ApproovHttpClientHandler ValidateServerCertificate missing certificate or absolute host for " + requestUrl +
+                    " certificatePresent=" + (certificateToValidate != null) +
+                    " hostPresent=" + !string.IsNullOrWhiteSpace(host) +
+                    " sslPolicyErrors=" + sslPolicyErrors);
                 return false;
             }
 
 #if UNITY_ANDROID || UNITY_IOS
-            string result = ApproovBridge.ShouldProceedWithNetworkConnection(certificate.RawData, host, ApproovBridge.kPinTypePublicKeySha256);
+            string result = ApproovBridge.ShouldProceedWithNetworkConnection(certificateToValidate.RawData, host, ApproovBridge.kPinTypePublicKeySha256);
             ApproovService.LogTrace("ApproovHttpClientHandler ValidateServerCertificate host=" + host + " url=" + requestUrl + " result=" + (result ?? "ALLOW"));
             return result == null;
 #else

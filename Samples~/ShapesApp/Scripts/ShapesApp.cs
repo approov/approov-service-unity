@@ -1221,11 +1221,11 @@ public class ShapesApp : MonoBehaviour
                 {
                     Title = "v3",
                     BaseUrl = ShapesHost + "v3/",
-                    RequiresApiKey = false,
+                    RequiresApiKey = true,
                     RequiresApproov = true,
                     SupportsMessageSigning = false,
                     Description =
-                        "v3 currently requires an Approov token for Shapes and does not require the Api-Key header. " +
+                        "v3 currently requires both Api-Key and an Approov token for Shapes. " +
                         "Hello remains a public health check.",
                 };
             default:
@@ -1774,8 +1774,8 @@ public class ShapesApp : MonoBehaviour
                 {
                     bool passed = result != null && result.IsSuccess;
                     expectationSummary = passed
-                        ? "Expected v3 shape success with Approov enabled."
-                        : "Expected v3 shape success but got: " + actualMessage;
+                        ? "Expected v3 shape success with Approov and Api-Key."
+                        : "Expected v3 shape success with Approov and Api-Key but got: " + actualMessage;
                     return passed;
                 }
 
@@ -1803,6 +1803,15 @@ public class ShapesApp : MonoBehaviour
                         ? "Expected v5 failure because the request is unsigned."
                         : "Expected a message-signature failure but got: " + actualMessage;
                     return signatureFailurePassed;
+                }
+
+                if (scenario.SignatureMode == ShapesSignatureMode.Account)
+                {
+                    bool accountFailurePassed = result != null && !result.IsSuccess && ContainsIgnoreCase(actualMessage, "message signature");
+                    expectationSummary = accountFailurePassed
+                        ? "Expected v5 account signing failure because the backend currently rejects account signatures."
+                        : "Expected an account-signature failure but got: " + actualMessage;
+                    return accountFailurePassed;
                 }
 
                 bool successPassed = result != null && result.IsSuccess;
