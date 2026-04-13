@@ -9,6 +9,9 @@ using UnityEngine.Networking;
 
 namespace Approov
 {
+    /// <summary>
+    /// Service-layer logging verbosity.
+    /// </summary>
     public enum ApproovLogLevel
     {
         Off,
@@ -17,17 +20,17 @@ namespace Approov
         Trace
     }
 
-    // We need the classes in order to use JsonUtility and deserialize the JSON response
-    // from getPinsJson method
+    // DTO used when callers deserialize the JSON returned by GetPinsJSON via JsonUtility.
     [System.Serializable]
     public class KeyValuePair
     {
         public string key;
         public List<string> value;
     }
-    /*  ApproovService class implements C# interface to the Approov SDK
-    *   by indirectly calling the bridging layer defined in ApproovBridge.cs
-    */
+
+    /// <summary>
+    /// Main entry point for initializing Approov and integrating it with Unity networking surfaces.
+    /// </summary>
     public static class ApproovService
     {
         // The config string used to initialize the SDK
@@ -91,6 +94,9 @@ namespace Approov
             Initialize(ApproovProjectConfig.GetConfigString());
         }
 
+        /// <summary>
+        /// Initializes the native Approov SDK with an explicit config string.
+        /// </summary>
         public static void Initialize(string config){
             LogTrace(TAG + "Initialize requested for platform " + Application.platform);
             if (string.IsNullOrWhiteSpace(config))
@@ -176,21 +182,33 @@ namespace Approov
             }
         }
 
+        /// <summary>
+        /// Creates an <see cref="HttpClient"/> that routes requests through <see cref="ApproovHttpClientHandler"/>.
+        /// </summary>
         public static HttpClient CreateHttpClient()
         {
             return new HttpClient(new ApproovHttpClientHandler(), disposeHandler: true);
         }
 
+        /// <summary>
+        /// Creates an <see cref="HttpClient"/> that wraps an existing handler chain with Approov processing.
+        /// </summary>
         public static HttpClient CreateHttpClient(HttpMessageHandler innerHandler)
         {
             return new HttpClient(new ApproovHttpClientHandler(innerHandler), disposeHandler: true);
         }
 
+        /// <summary>
+        /// Creates a standalone <see cref="ApproovHttpClientHandler"/>.
+        /// </summary>
         public static ApproovHttpClientHandler CreateHttpClientHandler()
         {
             return new ApproovHttpClientHandler();
         }
 
+        /// <summary>
+        /// Creates a standalone <see cref="ApproovHttpClientHandler"/> around an existing inner handler.
+        /// </summary>
         public static ApproovHttpClientHandler CreateHttpClientHandler(HttpMessageHandler innerHandler)
         {
             return new ApproovHttpClientHandler(innerHandler);
@@ -432,6 +450,10 @@ namespace Approov
             }
         }
 
+        /// <summary>
+        /// Controls whether the textual Approov fetch status should be used as the token value
+        /// when a request is allowed to proceed without a fetched token.
+        /// </summary>
         public static void SetUseApproovStatusIfNoToken(bool shouldUse)
         {
             lock (UseApproovStatusIfNoTokenLock)
@@ -441,6 +463,9 @@ namespace Approov
             }
         }
 
+        /// <summary>
+        /// Returns whether the service layer should substitute the textual fetch status when no token is available.
+        /// </summary>
         public static bool GetUseApproovStatusIfNoToken()
         {
             lock (UseApproovStatusIfNoTokenLock)
@@ -449,6 +474,9 @@ namespace Approov
             }
         }
 
+        /// <summary>
+        /// Installs a mutator that can customize fetch-result handling, request processing, and pinning.
+        /// </summary>
         public static void SetServiceMutator(ApproovServiceMutator mutator)
         {
             lock (ServiceMutatorLock)
@@ -458,6 +486,9 @@ namespace Approov
             }
         }
 
+        /// <summary>
+        /// Returns the currently active service mutator, never <c>null</c>.
+        /// </summary>
         public static ApproovServiceMutator GetServiceMutator()
         {
             lock (ServiceMutatorLock)
@@ -964,6 +995,9 @@ namespace Approov
             return GetAccountMessageSignature(message);
         }
 
+        /// <summary>
+        /// Returns a base64-encoded account-key signature for the exact message string supplied.
+        /// </summary>
         public static string GetAccountMessageSignature(string message)
         {
             EnsureSDKInitialized("GetAccountMessageSignature");
@@ -977,6 +1011,9 @@ namespace Approov
             return signature;
         }
 
+        /// <summary>
+        /// Returns a base64-encoded install-key signature for the exact message string supplied.
+        /// </summary>
         public static string GetInstallMessageSignature(string message)
         {
             EnsureSDKInitialized("GetInstallMessageSignature");
@@ -1017,10 +1054,9 @@ namespace Approov
             return fetchResult.token;
         }// FetchToken
 
-        /*  Get set of pins from Approov SDK in JSON format
-        *   @param pinType is the type of pin to be fetched
-        *   @return JSON string with the pins
-        */
+        /// <summary>
+        /// Returns the currently cached Approov pins as JSON for the requested pin type.
+        /// </summary>
         public static string GetPinsJSON(string pinType)
         {   
             string approovPinsJNI = ApproovBridge.GetPinsJSON(pinType);

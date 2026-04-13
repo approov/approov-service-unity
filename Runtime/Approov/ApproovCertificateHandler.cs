@@ -4,6 +4,9 @@ using UnityEngine.Networking;
 
 namespace Approov
 {
+    /// <summary>
+    /// Unity TLS callback that delegates certificate pin validation to the Approov native SDK.
+    /// </summary>
     public class ApproovCertificateHandler : CertificateHandler
     {
         private static readonly string TAG = "ApproovCertificateHandler ";
@@ -44,15 +47,15 @@ namespace Approov
                 return false;
             }
 
-            // Call bridging layer versions
+            // Delegate the SPKI pin check to the native SDK. A null result means the connection is allowed.
             string result = ApproovBridge.ShouldProceedWithNetworkConnection(certificateData, hostname, ApproovBridge.kPinTypePublicKeySha256);
-            // The bridging layer processes the return result from the native layer and returns null if the connection should be allowed
             if (result == null)
             {
                 ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: will ALLOW connection to " + requestUrl);
                 return true;
             }
-            // Pr returns an eeror message if the connection should be denied
+
+            // Non-null means the native layer produced a reason for denying the connection.
             ApproovService.LogWarning(TAG + "ApproovCertificateHandler.ValidateCertificate: will DENY connection to " + requestUrl + " with error: " + result);
             return false;
         }

@@ -8,6 +8,10 @@ using System.Threading.Tasks;
 
 namespace Approov
 {
+    /// <summary>
+    /// <see cref="HttpMessageHandler"/> adapter that applies the shared Approov request pipeline
+    /// to <see cref="HttpClient"/> traffic.
+    /// </summary>
     public sealed class ApproovHttpClientHandler : DelegatingHandler
     {
         private sealed class CachedRequestMetadata
@@ -18,12 +22,20 @@ namespace Approov
 
         private const string CachedUrlPropertyKey = "Approov.AbsoluteUrl";
         private const string CachedHostPropertyKey = "Approov.Host";
+        // Certificate validation can happen after the live request URI has been rewritten or partially
+        // obscured by the platform stack, so cache the original absolute URL and host here.
         private static readonly ConditionalWeakTable<HttpRequestMessage, CachedRequestMetadata> CachedRequestMetadataByMessage = new();
 
+        /// <summary>
+        /// Creates a handler with a default <see cref="HttpClientHandler"/> inner handler.
+        /// </summary>
         public ApproovHttpClientHandler() : this(CreateDefaultInnerHandler())
         {
         }
 
+        /// <summary>
+        /// Creates a handler that wraps an existing message-handler pipeline.
+        /// </summary>
         public ApproovHttpClientHandler(HttpMessageHandler innerHandler) : base(ConfigureInnerHandler(innerHandler ?? new HttpClientHandler()))
         {
         }
@@ -61,6 +73,7 @@ namespace Approov
         {
             if (innerHandler is HttpClientHandler httpClientHandler)
             {
+                // Hook Approov pin evaluation only when we have direct access to the TLS callback.
                 httpClientHandler.ServerCertificateCustomValidationCallback = ValidateServerCertificate;
             }
 

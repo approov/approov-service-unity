@@ -4,6 +4,10 @@ using System.Security.Cryptography;
 
 namespace Approov
 {
+    /// <summary>
+    /// Ready-to-use <see cref="ApproovServiceMutator"/> that adds RFC 9421-style HTTP message
+    /// signatures after an Approov token has been injected into the request.
+    /// </summary>
     public class ApproovDefaultMessageSigning : ApproovServiceMutator
     {
         protected internal enum SigningMode
@@ -28,10 +32,16 @@ namespace Approov
             public List<StructuredFieldParameter> Parameters { get; set; }
         }
 
+        /// <summary>
+        /// Describes the derived components that should be covered by a request signature.
+        /// </summary>
         public sealed class SignatureParameters
         {
             private readonly List<string> _componentIdentifiers = new();
 
+            /// <summary>
+            /// Adds a covered component identifier such as <c>@method</c>, <c>@target-uri</c>, or a header name.
+            /// </summary>
             public SignatureParameters AddComponentIdentifier(string componentIdentifier)
             {
                 if (string.IsNullOrWhiteSpace(componentIdentifier))
@@ -46,6 +56,9 @@ namespace Approov
             internal IReadOnlyList<string> ComponentIdentifiers => _componentIdentifiers;
         }
 
+        /// <summary>
+        /// Builder that controls how signatures are generated for a request.
+        /// </summary>
         public sealed class SignatureParametersFactory
         {
             private SignatureParameters _baseParameters;
@@ -58,12 +71,18 @@ namespace Approov
             private bool _addApproovTraceIDHeader;
             private readonly List<string> _optionalHeaders = new();
 
+            /// <summary>
+            /// Sets the base component set that is always covered by the signature.
+            /// </summary>
             public SignatureParametersFactory SetBaseParameters(SignatureParameters baseParameters)
             {
                 _baseParameters = baseParameters;
                 return this;
             }
 
+            /// <summary>
+            /// Configures whether the package should add and sign a <c>Content-Digest</c> header.
+            /// </summary>
             public SignatureParametersFactory SetBodyDigestConfig(string bodyDigestAlgorithm, bool required)
             {
                 if (bodyDigestAlgorithm == null)
@@ -81,42 +100,63 @@ namespace Approov
                 return this;
             }
 
+            /// <summary>
+            /// Uses the Approov install key for request signing.
+            /// </summary>
             public SignatureParametersFactory SetUseInstallMessageSigning()
             {
                 _useAccountMessageSigning = false;
                 return this;
             }
 
+            /// <summary>
+            /// Uses the Approov account key for request signing.
+            /// </summary>
             public SignatureParametersFactory SetUseAccountMessageSigning()
             {
                 _useAccountMessageSigning = true;
                 return this;
             }
 
+            /// <summary>
+            /// Adds the RFC 9421 <c>created</c> parameter to the signature input.
+            /// </summary>
             public SignatureParametersFactory SetAddCreated(bool addCreated)
             {
                 _addCreated = addCreated;
                 return this;
             }
 
+            /// <summary>
+            /// Adds an <c>expires</c> parameter relative to the current UTC timestamp.
+            /// </summary>
             public SignatureParametersFactory SetExpiresLifetime(long expiresLifetime)
             {
                 _expiresLifetime = expiresLifetime;
                 return this;
             }
 
+            /// <summary>
+            /// Includes the actual Approov token header that the service layer injected.
+            /// </summary>
             public SignatureParametersFactory SetAddApproovTokenHeader(bool addApproovTokenHeader)
             {
                 _addApproovTokenHeader = addApproovTokenHeader;
                 return this;
             }
 
+            /// <summary>
+            /// Includes the actual Approov trace header when the service layer added one.
+            /// </summary>
             public SignatureParametersFactory SetAddApproovTraceIDHeader(bool addApproovTraceIDHeader)
             {
                 _addApproovTraceIDHeader = addApproovTraceIDHeader;
                 return this;
             }
 
+            /// <summary>
+            /// Adds optional headers that are only signed when present on the request.
+            /// </summary>
             public SignatureParametersFactory AddOptionalHeaders(params string[] headers)
             {
                 if (headers == null)
@@ -168,6 +208,8 @@ namespace Approov
 
                 if (!string.IsNullOrWhiteSpace(_bodyDigestAlgorithm))
                 {
+                    // Content-Digest must be materialized before the signature base is built so the
+                    // generated header itself can also become a covered component.
                     bool generated = TryGenerateBodyDigest(request, _bodyDigestAlgorithm, components);
                     if (!generated && _bodyDigestRequired)
                     {
@@ -272,12 +314,18 @@ namespace Approov
 
         protected SignatureParametersFactory DefaultFactory { get; private set; }
 
+        /// <summary>
+        /// Sets the default factory used when no per-host override exists.
+        /// </summary>
         public ApproovDefaultMessageSigning SetDefaultFactory(SignatureParametersFactory factory)
         {
             DefaultFactory = factory;
             return this;
         }
 
+        /// <summary>
+        /// Associates a specific request authority with a dedicated signing configuration.
+        /// </summary>
         public ApproovDefaultMessageSigning PutHostFactory(string authority, SignatureParametersFactory factory)
         {
             if (string.IsNullOrWhiteSpace(authority))
@@ -322,6 +370,8 @@ namespace Approov
                 return;
             }
 
+            // Both headers are encoded as RFC 8941 structured fields so the verifier can reconstruct
+            // the exact covered component set and raw signature bytes.
             List<StructuredFieldItem> componentItems = new(plan.Components.Count);
             for (int i = 0; i < plan.Components.Count; i++)
             {
@@ -345,11 +395,17 @@ namespace Approov
                 " signature with " + plan.Components.Count + " components for " + request.Uri);
         }
 
+        /// <summary>
+        /// Returns the package default signing configuration used by the recommended quickstart flow.
+        /// </summary>
         public static SignatureParametersFactory GenerateDefaultSignatureParametersFactory()
         {
             return GenerateDefaultSignatureParametersFactory(null);
         }
 
+        /// <summary>
+        /// Returns the package default signing configuration with optional custom base components.
+        /// </summary>
         public static SignatureParametersFactory GenerateDefaultSignatureParametersFactory(SignatureParameters baseParametersOverride)
         {
             SignatureParameters baseParameters = baseParametersOverride ?? new SignatureParameters()
@@ -386,6 +442,8 @@ namespace Approov
                 byte[] rawSignature = Convert.FromBase64String(base64Signature);
                 if (mode == SigningMode.Install)
                 {
+                    // The Approov install-signing SDK returns DER-encoded ECDSA signatures, while
+                    // HTTP Message Signatures verifiers commonly expect fixed-width P1363 bytes.
                     rawSignature = ConvertDerSignatureToP1363(rawSignature);
                 }
 
@@ -403,6 +461,9 @@ namespace Approov
             }
         }
 
+        /// <summary>
+        /// Converts a DER-encoded ECDSA signature into the 64-byte P1363 representation.
+        /// </summary>
         internal static byte[] ConvertDerSignatureToP1363(byte[] derSignature)
         {
             if (derSignature == null || derSignature.Length == 0)

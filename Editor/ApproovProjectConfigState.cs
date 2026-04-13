@@ -57,6 +57,8 @@ namespace Approov.EditorTools
                 return;
             }
 
+            // The config string is stored in project settings for editing convenience, then mirrored into
+            // Resources so the runtime can read it inside player builds without depending on editor APIs.
             File.WriteAllText(ApproovProjectConfigState.RuntimeAssetPath, normalizedConfig);
             AssetDatabase.ImportAsset(ApproovProjectConfigState.RuntimeAssetPath, ImportAssetOptions.ForceSynchronousImport);
         }
@@ -101,6 +103,8 @@ namespace Approov.EditorTools
                 return;
             }
 
+            // The packaged Android bridge resolves an Approov SDK that requires API 23+, so fail the
+            // build early with a clear message instead of allowing an invalid exported project.
             if (PlayerSettings.Android.minSdkVersion < AndroidSdkVersions.AndroidApiLevel23)
             {
                 throw new BuildFailedException(

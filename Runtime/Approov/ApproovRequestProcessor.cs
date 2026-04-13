@@ -56,6 +56,8 @@ namespace Approov
             ApproovTokenFetchResult approovResult = ApproovBridge.FetchApproovTokenAndWait(requestUrl);
             if (approovResult.isConfigChanged)
             {
+                // A token fetch can also deliver refreshed dynamic pinning state. Clear the transport-side
+                // certificate cache and mark the SDK config as consumed so later fetches see a clean state.
                 ApproovService.LogTrace("ApproovRequestProcessor SDK configuration changed, refreshing pin state");
                 ApproovBridge.ClearCertificateCache();
                 ApproovService.FetchConfig();
@@ -160,6 +162,7 @@ namespace Approov
 
             foreach (string queryParameter in ApproovService.GetSubstitutionQueryParams())
             {
+                // Rewrite only the configured query parameter values so other query structure is preserved.
                 Regex regex = new("([?&]" + Regex.Escape(queryParameter) + "=)([^&#]*)", RegexOptions.ECMAScript);
                 if (!regex.IsMatch(updatedUrl))
                 {

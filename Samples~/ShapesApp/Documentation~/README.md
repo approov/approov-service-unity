@@ -15,8 +15,10 @@ The message-signing harness scene is test-only infrastructure. It is not part of
    `Assets/Samples/Approov Unity Service Layer/<package-version>/Shapes App/Scenes/SampleScene.unity`.
 3. Open `MessageSigningHarnessScene.unity` only when you are doing internal message-signing verification against the worker.
 4. Open `Tools/Approov/Approov Settings` and paste the config string from `approov sdk -getConfigString`.
-5. Use the same window to install the iOS SDK if you are building for iOS.
-6. Build for Android or iOS.
+5. If you are building for Android, no extra Approov SDK download is required. The package resolves the Android Approov SDK from Maven automatically.
+6. If you are building for iOS, install `Approov.xcframework` from the Unity menu before building:
+   `Tools/Approov/Install iOS SDK` for the latest release, or `Tools/Approov/Approov Settings` to pin a version.
+7. Build for Android or iOS.
 
 Do not ship a production app with an Approov dev key. A dev key is for controlled development and test flows only, and including it in a production build causes attestation to pass when it should not.
 

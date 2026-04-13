@@ -2,6 +2,10 @@ using System;
 
 namespace Approov
 {
+    /// <summary>
+    /// Extensibility point for customizing how the service layer handles fetch results, request
+    /// mutation, post-processing, and pinning decisions.
+    /// </summary>
     public abstract class ApproovServiceMutator
     {
         private sealed class DefaultApproovServiceMutator : ApproovServiceMutator
@@ -12,8 +16,14 @@ namespace Approov
             }
         }
 
+        /// <summary>
+        /// Default policy used when the caller does not install a custom mutator.
+        /// </summary>
         public static ApproovServiceMutator Default { get; } = new DefaultApproovServiceMutator();
 
+        /// <summary>
+        /// Handles the result of <see cref="ApproovService.Precheck"/>.
+        /// </summary>
         public virtual void HandlePrecheckResult(ApproovTokenFetchResult approovResult)
         {
             switch (approovResult.status)
@@ -32,6 +42,9 @@ namespace Approov
             }
         }
 
+        /// <summary>
+        /// Handles the result of an explicit token fetch.
+        /// </summary>
         public virtual void HandleFetchTokenResult(ApproovTokenFetchResult approovResult)
         {
             switch (approovResult.status)
@@ -47,6 +60,9 @@ namespace Approov
             }
         }
 
+        /// <summary>
+        /// Handles the result of a secure-string lookup or definition operation.
+        /// </summary>
         public virtual void HandleFetchSecureStringResult(ApproovTokenFetchResult approovResult, string operation, string key)
         {
             switch (approovResult.status)
@@ -68,6 +84,9 @@ namespace Approov
             }
         }
 
+        /// <summary>
+        /// Handles the result of an explicit custom JWT fetch.
+        /// </summary>
         public virtual void HandleFetchCustomJwtResult(ApproovTokenFetchResult approovResult)
         {
             switch (approovResult.status)
@@ -87,6 +106,9 @@ namespace Approov
             }
         }
 
+        /// <summary>
+        /// Determines whether the request should enter the Approov processing pipeline at all.
+        /// </summary>
         public virtual bool ShouldProcessRequest(ApproovRequestContext request)
         {
             if (request == null)
@@ -98,6 +120,10 @@ namespace Approov
             return !string.IsNullOrWhiteSpace(url) && !ApproovService.CheckURLIsExcluded(url);
         }
 
+        /// <summary>
+        /// Handles the token-fetch result produced during intercepted request processing and decides
+        /// whether the pipeline should continue mutating the request.
+        /// </summary>
         public virtual bool HandleInterceptorFetchTokenResult(ApproovRequestContext request, ApproovTokenFetchResult approovResult)
         {
             switch (approovResult.status)
@@ -119,6 +145,7 @@ namespace Approov
                             true);
                     }
 
+                    // Returning false means "send the original request unchanged".
                     return false;
                 case ApproovTokenFetchStatus.NoApproovService:
                 case ApproovTokenFetchStatus.UnknownURL:
@@ -130,6 +157,9 @@ namespace Approov
             }
         }
 
+        /// <summary>
+        /// Handles the result of a secure-string substitution for a request header.
+        /// </summary>
         public virtual bool HandleHeaderSubstitutionResult(ApproovRequestContext request, ApproovTokenFetchResult approovResult, string header)
         {
             switch (approovResult.status)
@@ -154,6 +184,9 @@ namespace Approov
             }
         }
 
+        /// <summary>
+        /// Handles the result of a secure-string substitution for a query parameter.
+        /// </summary>
         public virtual bool HandleQueryParamSubstitutionResult(ApproovRequestContext request, ApproovTokenFetchResult approovResult, string queryKey)
         {
             switch (approovResult.status)
@@ -178,10 +211,16 @@ namespace Approov
             }
         }
 
+        /// <summary>
+        /// Called after the service layer has finished mutating a request.
+        /// </summary>
         public virtual void HandleProcessedRequest(ApproovRequestContext request, ApproovRequestMutations changes)
         {
         }
 
+        /// <summary>
+        /// Determines whether Approov pinning should run for the request.
+        /// </summary>
         public virtual bool ShouldProcessPinning(ApproovRequestContext request)
         {
             return true;

@@ -10,6 +10,9 @@ using UnityEngine;
 
 namespace Approov.EditorTools
 {
+    /// <summary>
+    /// Editor workflow that fetches the native Approov iOS XCFramework into the Unity project.
+    /// </summary>
     internal static class ApproovIosSdkInstaller
     {
         private const string RepoOwner = "approov";
@@ -196,6 +199,7 @@ namespace Approov.EditorTools
                 FileUtil.DeleteFileOrDirectory(TargetPath + ".meta");
             }
 
+            // Install into Assets/Plugins/iOS so Unity includes the XCFramework in Xcode exports.
             Directory.CreateDirectory(Path.GetDirectoryName(TargetPath) ?? "Assets/Plugins/iOS");
             FileUtil.CopyFileOrDirectory(extractedFramework, TargetPath);
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
@@ -217,6 +221,8 @@ namespace Approov.EditorTools
                     continue;
                 }
 
+                // Scope the imported XCFramework strictly to iOS players. The package does not need it
+                // in the editor or on unrelated Unity build targets.
                 importer.SetCompatibleWithAnyPlatform(false);
                 importer.SetCompatibleWithEditor(false);
                 importer.SetCompatibleWithPlatform(BuildTarget.iOS, true);

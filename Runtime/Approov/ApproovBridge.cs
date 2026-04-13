@@ -5,6 +5,9 @@ using UnityEngine;
 
 namespace Approov
 {
+    /// <summary>
+    /// Normalized result returned by native token, secure-string, and custom JWT fetch operations.
+    /// </summary>
     [Serializable]
     public struct ApproovTokenFetchResult
     {
@@ -36,6 +39,9 @@ namespace Approov
         public string loggableToken;
     }
 
+    /// <summary>
+    /// Fetch status values returned by the native Approov SDK.
+    /// </summary>
     public enum ApproovTokenFetchStatus
     {
         Success,
@@ -85,6 +91,8 @@ namespace Approov
             byte[] measurementConfig = null;
             if (payload.measurementConfig != null)
             {
+                // JsonUtility does not deserialize directly into byte[] from JSON number arrays, so
+                // normalize through int[] first and then convert to the public byte[] contract.
                 measurementConfig = Array.ConvertAll(payload.measurementConfig, value => (byte)value);
             }
 

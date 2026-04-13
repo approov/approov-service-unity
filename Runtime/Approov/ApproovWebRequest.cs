@@ -3,6 +3,15 @@ using UnityEngine.Networking;
 
 namespace Approov
 {
+    /// <summary>
+    /// Compatibility wrapper over <see cref="UnityWebRequest"/> that attaches Approov-aware
+    /// certificate validation and forwards send operations through <see cref="ApproovService"/>.
+    /// </summary>
+    /// <remarks>
+    /// New integrations should generally prefer <see cref="ApproovService.SendWebRequest(UnityWebRequest)"/>
+    /// because Unity method hiding can bypass this wrapper when the instance is later treated as a
+    /// plain <see cref="UnityWebRequest"/>.
+    /// </remarks>
     public class ApproovWebRequest : UnityWebRequest
     {
         public ApproovWebRequest() : base()
@@ -108,6 +117,10 @@ namespace Approov
             return new ApproovWebRequest(uri, "PUT");
         }
 
+        /// <summary>
+        /// Sends the request through <see cref="ApproovService"/> so the full request-processing
+        /// pipeline runs before Unity dispatches the network call.
+        /// </summary>
         public new UnityWebRequestAsyncOperation SendWebRequest()
         {
             return ApproovService.SendWebRequest(this);

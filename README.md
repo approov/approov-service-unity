@@ -10,15 +10,24 @@ Add the package from a Git URL in Unity Package Manager:
 https://github.com/approov/approov-service-unity.git
 ```
 
-After installing the package:
+After installing the package, complete the project setup in Unity:
 
 1. Import the `Shapes App` sample from the Package Manager if you want the demo content.
    The sample scene is not shown directly under `Packages/io.approov.service.unity` because Unity hides `Samples~` in installed packages.
    After import, open `Assets/Samples/Approov Unity Service Layer/<package-version>/Shapes App/Scenes/SampleScene.unity`.
 2. Open `Tools/Approov/Approov Settings` and paste the config string from `approov sdk -getConfigString`.
-   Use the same window to install the native iOS SDK if you are targeting iOS.
-3. For Android, no manual `mainTemplate.gradle` or manifest edits are required. The packaged Android library resolves the Approov SDK and OkHttp from Maven automatically.
-   The Android project minimum API level must be set to 23 or higher.
+   The editor stores the value in project settings and mirrors it into `Assets/Resources/Approov/ApproovConfig.txt` for player builds.
+3. If you target Android, no manual Approov SDK download is required.
+   The packaged Android library resolves `io.approov:approov-android-sdk` and `okhttp` from Maven automatically when Unity builds or exports the Gradle project.
+4. If you target iOS, install the native SDK into the project from the Unity editor:
+   Use `Tools/Approov/Install iOS SDK` to fetch the latest release immediately.
+   Use `Tools/Approov/Approov Settings` to install the latest release, pin a specific release, or reinstall the pinned release.
+   The installer downloads `Approov.xcframework` and places it at `Assets/Plugins/iOS/Approov.xcframework`.
+
+This package intentionally differs from the raw Approov SDK integration guides:
+
+- On Android, the package owns the native dependency wiring, so you do not fetch an `.aar` manually.
+- On iOS, the package still requires an explicit native SDK fetch, but it is performed from the Unity `Tools/Approov` menu rather than by manually importing the XCFramework in Xcode.
 
 Do not include an Approov dev key in a production app. Dev keys are for controlled development and testing only, and shipping one causes attestation to pass when it should not.
 
@@ -30,7 +39,15 @@ using Approov;
 ApproovService.Initialize();
 ```
 
-The parameterless initializer reads the config string from project settings. Native initialization only runs on iOS and Android player builds.
+Call `ApproovService.Initialize()` as early as possible during app startup, before the first protected network call.
+
+The parameterless initializer reads the config string from the synced project asset. Native initialization only runs on iOS and Android player builds. In the Unity editor and desktop player builds, the config can exist in project settings but the native SDK remains disabled by design.
+
+Initialization behavior in this package is:
+
+- the first successful initialization locks the session to that config string
+- a repeated call with the same config is ignored
+- a repeated call with a different config throws a configuration failure
 
 ## Use With UnityWebRequest
 
@@ -56,9 +73,29 @@ HttpClient client = ApproovService.CreateHttpClient();
 HttpResponseMessage response = await client.GetAsync("https://approov.io");
 ```
 
+`ApproovService.CreateHttpClient()` is the recommended `HttpClient` entry point. Use `CreateHttpClientHandler()` when you need to compose the handler into an existing pipeline yourself.
+
+`ApproovHttpClientHandler` mutates outbound requests in the same way as the UnityWebRequest path. If its inner handler is an `HttpClientHandler`, it also hooks Approov pin validation into the TLS callback.
+
+## Platform Setup Notes
+
+### Android
+
+- The Android bridge is packaged as `Plugins/Android/ApproovUnity.androidlib`.
+- Its Gradle file declares the Approov Android SDK and OkHttp Maven dependencies for you.
+- The package enforces Android `minSdkVersion` 23 or higher at build time.
+- No manual `mainTemplate.gradle`, manifest, or `.aar` copy step is required for the Approov SDK itself.
+
+### iOS
+
+- The package expects `Assets/Plugins/iOS/Approov.xcframework` to exist in the Unity project.
+- The built-in installer fetches that XCFramework from `approov/approov-ios-sdk` GitHub releases and configures the plugin importer for iOS only.
+- Use the Unity menu to install it before building for iOS.
+- The upstream Approov iOS SDK requirement remains iOS 12 or higher.
+
 ## Message Signing And Mutators
 
-The runtime now exposes an `ApproovServiceMutator` hook point so request policy can be customized without forking the package. Install a mutator once during app startup:
+The runtime exposes an `ApproovServiceMutator` hook point so request policy can be customized without forking the package. Install a mutator once during app startup:
 
 ```csharp
 ApproovService.SetServiceMutator(new MyMutator());
@@ -76,6 +113,8 @@ ApproovService.SetServiceMutator(signer);
 ```
 
 The default signer adds `Signature` and `Signature-Input` headers only after an Approov token has been added to the request. It signs `@method`, `@target-uri`, the Approov token header, the optional trace header, selected request headers, and `Content-Digest` when the body is readable.
+
+Use message signing only on routes whose backend verifier is configured for the chosen signing mode. The package can produce both install-key signatures and account-key signatures, but server-side verification material and acceptance policy are outside the package.
 
 For internal end-to-end message-signing verification, including the dedicated test harness scene and verifier worker flow, see [docs/message-signing-e2e-testing.md](/Users/adriantukendorf/Developer/Tasks/approov-service-unity/docs/message-signing-e2e-testing.md). The harness is test-only infrastructure and is not part of the public Shapes example flow.
 
@@ -110,7 +149,7 @@ The package includes an editor installer that:
 - installs it into `Assets/Plugins/iOS/Approov.xcframework`
 - pins the resolved release in project settings so the project is reproducible
 
-Use `Tools/Approov/Approov Settings` to install the latest release, install a specific version, or reinstall the pinned version.
+Use `Tools/Approov/Install iOS SDK` for a one-click latest install, or use `Tools/Approov/Approov Settings` to install the latest release, install a specific version, or reinstall the pinned version.
 
 ## Repository Role
 
@@ -129,4 +168,5 @@ The old flow asked users to copy `Assets/` into their project and manually fetch
 
 - Unity 6+ only
 - Android builds require project min SDK 23 or higher
-- iOS uses `Approov.xcframework`
+- iOS builds require `Assets/Plugins/iOS/Approov.xcframework`, installed from the Unity `Tools/Approov` menu
+- the upstream Approov iOS SDK requires iOS 12 or higher

@@ -9,6 +9,9 @@ using UnityEngine.Networking;
 
 namespace Approov
 {
+    /// <summary>
+    /// Identifies which transport produced an <see cref="ApproovRequestContext"/>.
+    /// </summary>
     public enum ApproovRequestTransport
     {
         UnityWebRequest,
@@ -16,6 +19,13 @@ namespace Approov
         Snapshot
     }
 
+    /// <summary>
+    /// Transport-neutral request wrapper exposed to service mutators.
+    /// </summary>
+    /// <remarks>
+    /// A context can wrap a live mutable request or a snapshot copy used off-thread, such as during
+    /// certificate validation.
+    /// </remarks>
     public sealed class ApproovRequestContext
     {
         private const string TAG = "ApproovRequestContext ";
@@ -49,10 +59,19 @@ namespace Approov
             _snapshotBody = snapshotBody;
         }
 
+        /// <summary>
+        /// The underlying request transport.
+        /// </summary>
         public ApproovRequestTransport Transport { get; }
 
+        /// <summary>
+        /// The HTTP method associated with the request.
+        /// </summary>
         public string Method { get; }
 
+        /// <summary>
+        /// The current request URI. Setting this updates the live request when the context is mutable.
+        /// </summary>
         public Uri Uri
         {
             get => _uri;
@@ -68,6 +87,9 @@ namespace Approov
             }
         }
 
+        /// <summary>
+        /// Returns a header value or <c>null</c> if the header is absent.
+        /// </summary>
         public string GetHeader(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -83,12 +105,18 @@ namespace Approov
             return _getHeader?.Invoke(name);
         }
 
+        /// <summary>
+        /// Returns whether the request currently contains the given header name.
+        /// </summary>
         public bool HasHeader(string name)
         {
             // Header presence is independent from whether the stored value is empty.
             return GetHeader(name) != null;
         }
 
+        /// <summary>
+        /// Sets or replaces a header value.
+        /// </summary>
         public void SetHeader(string name, string value)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -105,6 +133,9 @@ namespace Approov
             }
         }
 
+        /// <summary>
+        /// Attempts to return a defensive copy of the request body bytes when the transport exposes them.
+        /// </summary>
         public bool TryGetBodyBytes(out byte[] bodyBytes)
         {
             byte[] bytes = _snapshotBody;
