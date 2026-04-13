@@ -261,8 +261,10 @@ namespace Approov
 
             StringBuilder builder = new();
             bool isFirst = true;
+            bool hasAnyValues = false;
             foreach (string value in values)
             {
+                hasAnyValues = true;
                 if (!isFirst)
                 {
                     builder.Append(',');
@@ -272,7 +274,7 @@ namespace Approov
                 isFirst = false;
             }
 
-            return builder.Length == 0 ? null : builder.ToString();
+            return !hasAnyValues ? null : builder.ToString();
         }
 
         private static byte[] TryGetUnityBodyBytes(UnityWebRequest request)
@@ -302,22 +304,22 @@ namespace Approov
             }
             catch (IOException ex)
             {
-                Debug.LogWarning(TAG + "TryGetHttpBodyBytes failed to read buffered content: " + ex.Message);
+                ApproovService.LogWarning(TAG + "TryGetHttpBodyBytes failed to read buffered content: " + ex.Message);
                 return null;
             }
             catch (TaskCanceledException ex)
             {
-                Debug.LogWarning(TAG + "TryGetHttpBodyBytes was canceled: " + ex.Message);
+                ApproovService.LogWarning(TAG + "TryGetHttpBodyBytes was canceled: " + ex.Message);
                 return null;
             }
             catch (ObjectDisposedException ex)
             {
-                Debug.LogWarning(TAG + "TryGetHttpBodyBytes cannot read disposed content: " + ex.Message);
+                ApproovService.LogWarning(TAG + "TryGetHttpBodyBytes cannot read disposed content: " + ex.Message);
                 return null;
             }
             catch (InvalidOperationException ex)
             {
-                Debug.LogWarning(TAG + "TryGetHttpBodyBytes cannot buffer content: " + ex.Message);
+                ApproovService.LogWarning(TAG + "TryGetHttpBodyBytes cannot buffer content: " + ex.Message);
                 return null;
             }
         }
