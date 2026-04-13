@@ -1,6 +1,6 @@
 # Approov Unity Service
 
-`io.approov.service.unity` is a Unity 6+ UPM package that adds Approov protection to both `UnityWebRequest` and `HttpClient`.
+`io.approov.service.unity` is a Unity 6+ & 2022 LTS UPM package that adds Approov protection to both `UnityWebRequest` and `HttpClient`.
 
 ## Install
 
