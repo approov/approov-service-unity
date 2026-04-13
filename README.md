@@ -89,6 +89,7 @@ The old flow asked users to copy `Assets/` into their project and manually fetch
 
 ## Platform Notes
 
-- Unity 6+ only
+- This package is intended only for mobile apps iOS/Android projects
+- Unity 6+ or 2022 LTS version
 - Android builds require project min SDK 23 or higher
 - iOS uses `Approov.xcframework`
