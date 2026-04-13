@@ -116,7 +116,7 @@ The default signer adds `Signature` and `Signature-Input` headers only after an 
 
 Use message signing only on routes whose backend verifier is configured for the chosen signing mode. The package can produce both install-key signatures and account-key signatures, but server-side verification material and acceptance policy are outside the package.
 
-For internal end-to-end message-signing verification, including the dedicated test harness scene and verifier worker flow, see [docs/message-signing-e2e-testing.md](/Users/adriantukendorf/Developer/Tasks/approov-service-unity/docs/message-signing-e2e-testing.md). The harness is test-only infrastructure and is not part of the public Shapes example flow.
+For internal end-to-end message-signing verification, including the dedicated test harness scene and verifier worker flow, see [docs/message-signing-e2e-testing.md](docs/message-signing-e2e-testing.md). The harness is test-only infrastructure and is not part of the public Shapes example flow.
 
 For direct use of the underlying SDK signing primitives:
 
