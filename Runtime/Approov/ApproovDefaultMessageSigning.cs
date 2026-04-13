@@ -277,9 +277,7 @@ namespace Approov
                     return;
                 }
 
-                string normalizedIdentifier = identifier.StartsWith("@", StringComparison.Ordinal)
-                    ? identifier.ToLowerInvariant()
-                    : identifier.ToLowerInvariant();
+                string normalizedIdentifier = identifier.ToLowerInvariant();
 
                 for (int i = 0; i < components.Count; i++)
                 {

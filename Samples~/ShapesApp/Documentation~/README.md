@@ -45,7 +45,7 @@ When `Signature` is set to `Install` or `Account`, the sample installs a sample-
 The sample also enables detailed service-layer trace logging by default so that request mutation, token fetch, signing, and transport errors are visible in the console while you exercise the flows.
 It also writes a persistent diagnostics file named `approov-shapes-diagnostics.log` under `Application.persistentDataPath`, and the sample logs that full path at startup.
 
-For a Cloudflare-worker-based end-to-end verifier setup, see [docs/message-signing-e2e-testing.md](/Users/adriantukendorf/Developer/Tasks/approov-service-unity/docs/message-signing-e2e-testing.md).
+For a Cloudflare-worker-based end-to-end verifier setup, see [docs/message-signing-e2e-testing.md](../../../docs/message-signing-e2e-testing.md).
 
 ## Message Signing Harness Scene
 

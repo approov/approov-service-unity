@@ -99,7 +99,7 @@ namespace Approov
                 tokenValue = ApproovService.ApproovTokenFetchStatusToString(approovResult.status);
             }
 
-            if (tokenValue != null)
+            if (!string.IsNullOrWhiteSpace(tokenValue))
             {
                 request.SetHeader(tokenHeaderKey, ApproovService.GetTokenPrefix() + tokenValue);
                 changes.TokenHeaderKey = tokenHeaderKey;

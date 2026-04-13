@@ -5,8 +5,8 @@ Do not include an Approov dev key in a production build. A dev key is only for c
 
 This repository already has useful message-signing coverage, but it is split across unit tests and the Shapes sample app:
 
-- [Tests/Runtime/ApproovDefaultMessageSigningTests.cs](/Users/adriantukendorf/Developer/Tasks/approov-service-unity/Tests/Runtime/ApproovDefaultMessageSigningTests.cs) checks RFC 9421 header generation, optional header coverage, and `Content-Digest` generation.
-- [Samples~/ShapesApp/Scripts/ShapesApp.cs](/Users/adriantukendorf/Developer/Tasks/approov-service-unity/Samples~/ShapesApp/Scripts/ShapesApp.cs) exercises the real request pipeline for both `UnityWebRequest` and `HttpClient`.
+- [Tests/Runtime/ApproovDefaultMessageSigningTests.cs](../Tests/Runtime/ApproovDefaultMessageSigningTests.cs) checks RFC 9421 header generation, optional header coverage, and `Content-Digest` generation.
+- [Samples~/ShapesApp/Scripts/ShapesApp.cs](../Samples~/ShapesApp/Scripts/ShapesApp.cs) exercises the real request pipeline for both `UnityWebRequest` and `HttpClient`.
 
 What is still missing in this repo is a backend under our control that validates the actual signed request produced by the package. The internal Cloudflare worker at `approov/internal-adrian/internal-verifier-worker` is a good fit for that gap.
 
@@ -61,11 +61,7 @@ Recommended minimum matrix:
 
 ## Cloudflare Worker Setup
 
-The referenced worker already has the right verification logic. On this machine:
-
-- `wrangler whoami` succeeds
-- the worker dependency install succeeds
-- the worker test suite passes with `6` tests
+The referenced worker already has the right verification logic. Treat the following as the expected setup flow and verify it in your own environment:
 
 Suggested setup flow:
 
@@ -113,17 +109,17 @@ The fastest practical route is:
 
 1. Deploy the verifier worker.
 2. Protect the worker host/path in Approov so the app receives real Approov tokens for that destination.
-3. Open [Samples~/ShapesApp/Scenes/MessageSigningHarnessScene.unity](/Users/adriantukendorf/Developer/Tasks/approov-service-unity/Samples~/ShapesApp/Scenes/MessageSigningHarnessScene.unity).
+3. Open [Samples~/ShapesApp/Scenes/MessageSigningHarnessScene.unity](../Samples~/ShapesApp/Scenes/MessageSigningHarnessScene.unity).
 4. Enter the deployed worker URL into the runtime `Worker URL` field.
 5. Run the harness on device with `UnityWebRequest` and `HttpClient`.
 
-The harness implementation lives in [Samples~/ShapesApp/Scripts/MessageSigningHarnessApp.cs](/Users/adriantukendorf/Developer/Tasks/approov-service-unity/Samples~/ShapesApp/Scripts/MessageSigningHarnessApp.cs). Keep it positioned as internal verification tooling rather than as package example code.
+The harness implementation lives in [Samples~/ShapesApp/Scripts/MessageSigningHarnessApp.cs](../Samples~/ShapesApp/Scripts/MessageSigningHarnessApp.cs). Keep it positioned as internal verification tooling rather than as package example code.
 
 ## Notes On Compatibility
 
-- The package default signature expiry window is `15` seconds in [Runtime/Approov/ApproovDefaultMessageSigning.cs](/Users/adriantukendorf/Developer/Tasks/approov-service-unity/Runtime/Approov/ApproovDefaultMessageSigning.cs). A worker tolerance of `60` seconds is safer for mobile-device clock skew than the checked-in `5` second example.
+- The package default signature expiry window is `15` seconds in [Runtime/Approov/ApproovDefaultMessageSigning.cs](../Runtime/Approov/ApproovDefaultMessageSigning.cs). A worker tolerance of `60` seconds is safer for mobile-device clock skew than the checked-in `5` second example.
 - The package only adds `Content-Digest` when the request body is readable. For the current sample `GET` flow, digest verification is naturally out of scope unless you add a `POST` path.
-- The harness auto-test expectations are currently tailored to install-signature verification against the worker response contract in [Samples~/ShapesApp/Scripts/MessageSigningHarnessApp.cs](/Users/adriantukendorf/Developer/Tasks/approov-service-unity/Samples~/ShapesApp/Scripts/MessageSigningHarnessApp.cs).
+- The harness auto-test expectations are currently tailored to install-signature verification against the worker response contract in [Samples~/ShapesApp/Scripts/MessageSigningHarnessApp.cs](../Samples~/ShapesApp/Scripts/MessageSigningHarnessApp.cs).
 
 ## Suggested Follow-Up Changes
 
