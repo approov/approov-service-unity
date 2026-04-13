@@ -14,7 +14,6 @@ public class ShapesApp : MonoBehaviour
 {
     private const string ShapesHost = "https://shapes.approov.io/";
     private const string ApiKey = "yXClypapWNHIifHUWmBIyPFAm";
-    private const string DefaultApproovDevKey = "l_zPzVpmXN8oKwQ-";
     private const string DiagnosticsFileName = "approov-shapes-diagnostics.log";
     private const string SampleLogTag = "ShapesApp";
     private const int HttpTimeoutSeconds = 20;
@@ -217,8 +216,8 @@ public class ShapesApp : MonoBehaviour
     [SerializeField] private ShapesEndpointVersion defaultEndpoint = ShapesEndpointVersion.V3;
     [SerializeField] private ShapesSignatureMode defaultSignatureMode = ShapesSignatureMode.Install;
     [SerializeField] private bool enableDetailedServiceLogging = true;
-    [SerializeField] private bool useApproovDevKey = true;
-    [SerializeField] private string approovDevKey = DefaultApproovDevKey;
+    [SerializeField] private bool useApproovDevKey = false;
+    [SerializeField] private string approovDevKey = string.Empty;
 
     private readonly Dictionary<string, Sprite> _imageSprites = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Texture2D> _images = new(StringComparer.OrdinalIgnoreCase);
@@ -283,7 +282,8 @@ public class ShapesApp : MonoBehaviour
             return;
         }
 
-        LogSample("Approov dev key configured for this sample build and will be applied after SDK initialization.");
+        LogSampleWarning("Approov dev key configured for this sample build and will be applied after SDK initialization. " +
+                         "Do not ship a production app with a dev key because it bypasses normal attestation checks.");
     }
 
     private void ApplyConfiguredDevKey()
@@ -294,7 +294,8 @@ public class ShapesApp : MonoBehaviour
         }
 
         ApproovService.SetDevKey(approovDevKey);
-        LogSample("Approov dev key configured for this sample build. sdkInitialized=" + ApproovService.IsSDKInitialized());
+        LogSampleWarning("Approov dev key configured for this sample build. sdkInitialized=" + ApproovService.IsSDKInitialized() +
+                         ". Do not ship a production app with a dev key because it causes attestation to pass.");
     }
 
     private bool IsDevKeyConfigured()

@@ -31,7 +31,7 @@
   "samples": [
     {
       "displayName": "Shapes App",
-      "description": "Sample scene showing UnityWebRequest and HttpClient integration against the Shapes demo backend, with runtime endpoint and message-signing controls.",
+      "description": "Sample scenes for the Shapes demo backend. Includes an internal message-signing harness scene for verifier-worker testing.",
       "path": "Samples~/ShapesApp"
     }
   ]

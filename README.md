@@ -20,6 +20,8 @@ After installing the package:
 3. For Android, no manual `mainTemplate.gradle` or manifest edits are required. The packaged Android library resolves the Approov SDK and OkHttp from Maven automatically.
    The Android project minimum API level must be set to 23 or higher.
 
+Do not include an Approov dev key in a production app. Dev keys are for controlled development and testing only, and shipping one causes attestation to pass when it should not.
+
 ## Initialize
 
 ```csharp
@@ -74,6 +76,8 @@ ApproovService.SetServiceMutator(signer);
 ```
 
 The default signer adds `Signature` and `Signature-Input` headers only after an Approov token has been added to the request. It signs `@method`, `@target-uri`, the Approov token header, the optional trace header, selected request headers, and `Content-Digest` when the body is readable.
+
+For internal end-to-end message-signing verification, including the dedicated test harness scene and verifier worker flow, see [docs/message-signing-e2e-testing.md](/Users/adriantukendorf/Developer/Tasks/approov-service-unity/docs/message-signing-e2e-testing.md). The harness is test-only infrastructure and is not part of the public Shapes example flow.
 
 For direct use of the underlying SDK signing primitives:
 
