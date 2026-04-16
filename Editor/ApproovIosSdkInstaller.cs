@@ -173,7 +173,7 @@ namespace Approov.EditorTools
         private static HttpClient CreateClient()
         {
             HttpClient client = new HttpClient();
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Approov-Unity-Package/0.1.0");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Approov-Unity-Package/1.0.0");
             client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
             return client;
         }
