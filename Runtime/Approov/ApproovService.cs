@@ -140,24 +140,30 @@ namespace Approov
                 LogWarning(TAG + "Approov native initialization is not available on this platform.");
                 return;
 #endif
-                // Set a default user property so Approov logs can identify the service layer and app.
-                string defaultUserProperty = BuildDefaultUserProperty();
-                SetUserProperty(defaultUserProperty);
-                // Sotre the config string used
                 sConfigStringUsed = config;
-                // Update the status
                 ApproovSDKInitialized = true;
 
-                Debug.Log(TAG + "Approov successfully initialized");
-                Debug.Log(TAG + "Approov user property: " + defaultUserProperty);
-                string deviceID = GetDeviceID();
-                if (string.IsNullOrWhiteSpace(deviceID))
+                // Set a default user property so Approov logs can identify the service layer and app.
+                try
                 {
-                    LogWarning(TAG + "Unable to read the Approov device ID after initialization.");
+                    string defaultUserProperty = BuildDefaultUserProperty();
+                    SetUserProperty(defaultUserProperty);
+
+                    Debug.Log(TAG + "Approov successfully initialized");
+                    Debug.Log(TAG + "Approov user property: " + defaultUserProperty);
+                    string deviceID = GetDeviceID();
+                    if (string.IsNullOrWhiteSpace(deviceID))
+                    {
+                        LogWarning(TAG + "Unable to read the Approov device ID after initialization.");
+                    }
+                    else
+                    {
+                        Debug.Log(TAG + "Approov device ID: " + deviceID);
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    Debug.Log(TAG + "Approov device ID: " + deviceID);
+                    LogWarning(TAG + "Approov initialized but post-initialization metadata setup failed: " + ex.Message);
                 }
             }  
         }// Initialize method
