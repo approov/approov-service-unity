@@ -116,33 +116,41 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
 // but rather from the functions defined bellow
 NSMutableDictionary *globalCacheDictionary;
 
+static NSMutableDictionary *getGlobalCacheDictionary(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        globalCacheDictionary = [NSMutableDictionary dictionary];
+    });
+    return globalCacheDictionary;
+}
+
 
 // Function to initialize the global dictionary
 void initializeGlobalCacheDictionary() {
-    globalCacheDictionary = [NSMutableDictionary dictionary];
+    (void)getGlobalCacheDictionary();
 }
 
 // Function to add an object to the global dictionary
 void addToGlobalCache(NSString* key,NSData* value) {
-    @synchronized (globalCacheDictionary) {
-        [globalCacheDictionary setObject:value forKey:key];
+    NSMutableDictionary *cache = getGlobalCacheDictionary();
+    @synchronized (cache) {
+        [cache setObject:value forKey:key];
     }
 }
 
 // Function to retrieve an object from the global dictionary
 id retrieveFromGlobalCacheDictionary(NSString *key) {
-    @synchronized (globalCacheDictionary) {
-        if (globalCacheDictionary == nil) {
-            return nil;
-        }
-        return globalCacheDictionary[key];
+    NSMutableDictionary *cache = getGlobalCacheDictionary();
+    @synchronized (cache) {
+        return cache[key];
     }
 }
 
 // Function to remove an object from the global dictionary
 void removeFromGlobalCacheDictionary(NSString *key) {
-    @synchronized (globalCacheDictionary) {
-        [globalCacheDictionary removeObjectForKey:key];
+    NSMutableDictionary *cache = getGlobalCacheDictionary();
+    @synchronized (cache) {
+        [cache removeObjectForKey:key];
     }
 }
 
@@ -152,8 +160,9 @@ extern "C" {
 }
 // Function to empty the global dictionary
 void Approov_emptyGlobalCacheDictionary() {
-    @synchronized (globalCacheDictionary) {
-        [globalCacheDictionary removeAllObjects];
+    NSMutableDictionary *cache = getGlobalCacheDictionary();
+    @synchronized (cache) {
+        [cache removeAllObjects];
     }
 }
 
@@ -267,6 +276,7 @@ extern "C" {
 }
 
 bool Approov_initialize(const char *initialConfig, const char *updateConfig, const char *comment, NSError *__autoreleasing *error) {
+        initializeGlobalCacheDictionary();
         // Call the initialize method
         BOOL success = [Approov initialize:[NSString stringWithUTF8String:initialConfig] updateConfig:updateConfig ? [NSString stringWithUTF8String:updateConfig] : nil comment:comment ? [NSString stringWithUTF8String:comment] : nil error:error];
         return success;
