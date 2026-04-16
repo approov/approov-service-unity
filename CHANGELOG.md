@@ -4,7 +4,7 @@ All notable changes to this package are documented in this file.
 
 The format is based on Keep a Changelog and this package follows Semantic Versioning.
 
-## [Unreleased]
+## [1.0.0] - 2026-04-16
 
 ### Added
 
@@ -19,6 +19,9 @@ The format is based on Keep a Changelog and this package follows Semantic Versio
 - request processing now routes token/substitution decisions through the active service mutator
 - `UNPROTECTED_URL` now skips secure-string substitution and signing by default
 - pinning can now be disabled per request through `ShouldProcessPinning(...)`
+- iOS certificate cache initialization is now safe for first use and native startup
+- Android bridge-class initialization is now synchronized to avoid first-access races
+- managed Approov initialization state is now committed atomically after native SDK startup
 
 ## [0.1.0] - 2026-03-19
 
