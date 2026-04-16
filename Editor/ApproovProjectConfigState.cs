@@ -103,12 +103,12 @@ namespace Approov.EditorTools
                 return;
             }
 
-            // The packaged Android bridge resolves an Approov SDK that requires API 23+, so fail the
-            // build early with a clear message instead of allowing an invalid exported project.
-            if (PlayerSettings.Android.minSdkVersion < AndroidSdkVersions.AndroidApiLevel23)
+            // Current Unity versions require API 25+, so fail the build early with a clear message
+            // instead of allowing an unsupported Android minimum SDK configuration.
+            if (PlayerSettings.Android.minSdkVersion < AndroidSdkVersions.AndroidApiLevel25)
             {
                 throw new BuildFailedException(
-                    "Approov Unity Service Layer requires Android minSdkVersion 23 or higher. " +
+                    "Approov Unity Service Layer requires Android minSdkVersion 25 or higher. " +
                     "Update Project Settings > Player > Android > Minimum API Level before building.");
             }
         }
