@@ -366,6 +366,7 @@ namespace Approov
         }
 #elif UNITY_ANDROID
         private const string AndroidBridgeClassName = "io.approov.unity.service.ApproovUnityBridge";
+        private static readonly object BridgeClassLock = new();
         private static AndroidJavaClass sBridgeClass;
 
         private static sbyte[] ToSignedBytes(byte[] bytes)
@@ -398,13 +399,16 @@ namespace Approov
         {
             get
             {
-                if (sBridgeClass == null)
+                lock (BridgeClassLock)
                 {
-                    AndroidJNI.AttachCurrentThread();
-                    sBridgeClass = new AndroidJavaClass(AndroidBridgeClassName);
-                }
+                    if (sBridgeClass == null)
+                    {
+                        AndroidJNI.AttachCurrentThread();
+                        sBridgeClass = new AndroidJavaClass(AndroidBridgeClassName);
+                    }
 
-                return sBridgeClass;
+                    return sBridgeClass;
+                }
             }
         }
 
