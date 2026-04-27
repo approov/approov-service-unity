@@ -171,7 +171,7 @@ namespace Approov
                 return sslPolicyErrors == SslPolicyErrors.None;
             }
 
-            if (requestMessage != null && !ApproovService.ShouldApplyPinning(ApproovRequestContext.CreateSnapshot(requestMessage)))
+            if (requestMessage != null && !ApproovService.ShouldApplyPinning(ApproovRequestContext.CreateSnapshot(requestMessage, includeBody: false)))
             {
                 ApproovService.LogTrace("ApproovHttpClientHandler ValidateServerCertificate skipping pinning because mutator disabled it");
                 return sslPolicyErrors == SslPolicyErrors.None;

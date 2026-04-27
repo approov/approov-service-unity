@@ -221,6 +221,11 @@ namespace Approov
 
         internal static ApproovRequestContext CreateSnapshot(HttpRequestMessage request)
         {
+            return CreateSnapshot(request, true);
+        }
+
+        internal static ApproovRequestContext CreateSnapshot(HttpRequestMessage request, bool includeBody)
+        {
             if (request == null)
             {
                 throw new ArgumentNullException(nameof(request));
@@ -249,7 +254,7 @@ namespace Approov
                 null,
                 null,
                 headers,
-                TryGetHttpBodyBytes(request));
+                includeBody ? TryGetHttpBodyBytes(request) : null);
         }
 
         internal static string CombineHeaderValues(IEnumerable<string> values)

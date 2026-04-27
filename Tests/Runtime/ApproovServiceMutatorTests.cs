@@ -1,10 +1,26 @@
+using System.IO;
 using System.Net.Http;
+using System.Threading.Tasks;
 using NUnit.Framework;
 
 namespace Approov.Tests
 {
     public class ApproovServiceMutatorTests
     {
+        private sealed class ThrowingHttpContent : HttpContent
+        {
+            protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext context)
+            {
+                throw new IOException("content should not be read");
+            }
+
+            protected override bool TryComputeLength(out long length)
+            {
+                length = -1;
+                return false;
+            }
+        }
+
         [SetUp]
         public void SetUp()
         {
@@ -105,6 +121,20 @@ namespace Approov.Tests
             ApproovRequestContext context = ApproovRequestContext.Create(request);
 
             Assert.That(context.Uri, Is.Null);
+        }
+
+        [Test]
+        public void CreateSnapshotWithoutBody_DoesNotReadHttpContent()
+        {
+            HttpRequestMessage request = new(HttpMethod.Post, "https://api.example.com")
+            {
+                Content = new ThrowingHttpContent()
+            };
+
+            ApproovRequestContext context = ApproovRequestContext.CreateSnapshot(request, includeBody: false);
+
+            Assert.That(context.Uri.AbsoluteUri, Is.EqualTo("https://api.example.com/"));
+            Assert.False(context.TryGetBodyBytes(out _));
         }
     }
 }
