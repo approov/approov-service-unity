@@ -1,6 +1,6 @@
 # Approov Unity Service
 
-`io.approov.service.unity` is a Unity 6+ & 2022 LTS UPM package that adds Approov protection to both `UnityWebRequest` and `HttpClient`.
+`io.approov.service.unity` is a Unity 2022 LTS and Unity 6000 UPM package that adds Approov protection to both `UnityWebRequest` and `HttpClient`.
 
 ## Install
 
@@ -167,6 +167,6 @@ The old flow asked users to copy `Assets/` into their project and manually fetch
 ## Platform Notes
 
 - This package is intended only for mobile apps iOS/Android projects
-- Unity 6+ or 2022 LTS version
+- Unity 2022 LTS or Unity 6000
 - Android builds require project min SDK 23 or higher
 - iOS uses `Approov.xcframework`

@@ -2,7 +2,7 @@
   "name": "io.approov.service.unity",
   "displayName": "Approov Unity Service Layer",
   "version": "1.0.0",
-  "unity": "6000.0",
+  "unity": "2022.3",
   "description": "Protect UnityWebRequest and HttpClient traffic on iOS and Android with Approov token injection, dynamic certificate pinning, secure string substitution, trace headers, and project-based configuration.",
   "documentationUrl": "https://github.com/approov/approov-service-unity#readme",
   "changelogUrl": "https://github.com/approov/approov-service-unity/blob/main/CHANGELOG.md",
