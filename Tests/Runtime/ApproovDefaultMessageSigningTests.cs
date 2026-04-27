@@ -110,6 +110,36 @@ namespace Approov.Tests
         }
 
         [Test]
+        public void HandleProcessedRequest_UsesRfc9421QueryComponentValue()
+        {
+            ApproovDefaultMessageSigning.SignatureParameters parameters = new ApproovDefaultMessageSigning.SignatureParameters()
+                .AddComponentIdentifier("@query");
+            ApproovDefaultMessageSigning.SignatureParametersFactory factory = new ApproovDefaultMessageSigning.SignatureParametersFactory()
+                .SetBaseParameters(parameters)
+                .SetUseInstallMessageSigning();
+            StubSigner signer = new StubSigner();
+            signer.SetDefaultFactory(factory);
+
+            HttpRequestMessage withQuery = new(HttpMethod.Get, "https://api.example.com/v1/test?x=1");
+            withQuery.Headers.TryAddWithoutValidation("Approov-Token", "token-value");
+            signer.HandleProcessedRequest(ApproovRequestContext.Create(withQuery), new ApproovRequestMutations
+            {
+                TokenHeaderKey = "Approov-Token"
+            });
+
+            StringAssert.Contains("\"@query\": ?x=1", signer.LastMessage);
+
+            HttpRequestMessage withoutQuery = new(HttpMethod.Get, "https://api.example.com/v1/test");
+            withoutQuery.Headers.TryAddWithoutValidation("Approov-Token", "token-value");
+            signer.HandleProcessedRequest(ApproovRequestContext.Create(withoutQuery), new ApproovRequestMutations
+            {
+                TokenHeaderKey = "Approov-Token"
+            });
+
+            StringAssert.Contains("\"@query\": ?", signer.LastMessage);
+        }
+
+        [Test]
         public void SerializeDictionary_OmitsEqualsForBareBooleanTrue()
         {
             string serialized = StructuredFieldValueSerializer.SerializeDictionary(new List<KeyValuePair<string, StructuredFieldItem>>

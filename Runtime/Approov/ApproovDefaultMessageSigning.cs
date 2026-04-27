@@ -524,7 +524,12 @@ namespace Approov
                 case "@path":
                     return request.Uri?.AbsolutePath ?? string.Empty;
                 case "@query":
-                    return request.Uri?.Query?.TrimStart('?') ?? string.Empty;
+                    if (request.Uri == null)
+                    {
+                        return string.Empty;
+                    }
+
+                    return string.IsNullOrEmpty(request.Uri.Query) ? "?" : request.Uri.Query;
                 case "@request-target":
                     if (request.Uri == null)
                     {
