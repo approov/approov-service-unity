@@ -37,8 +37,8 @@ namespace Approov
 
             if (requestContext != null && !ApproovService.ShouldApplyPinning(requestContext))
             {
-                ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: pinning skipped by mutator");
-                return true;
+                ApproovService.LogWarning(TAG + "ApproovCertificateHandler.ValidateCertificate: pinning skipped by mutator but certificate handler is still attached; denying connection for " + requestUrl);
+                return false;
             }
 
             if (string.IsNullOrWhiteSpace(hostname))
