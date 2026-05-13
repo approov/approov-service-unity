@@ -62,6 +62,15 @@ namespace Approov.Tests
             StringAssert.Contains("NSString *urlString = [@\"https://\" stringByAppendingString:authority];", iosSource);
         }
 
+        [Test]
+        public void IosMessageSigning_AllowsEmptyMessages()
+        {
+            string source = ReadPackageFile("Runtime/Approov/ApproovBridge.cs");
+
+            Assert.That(source, Does.Not.Contain("string.IsNullOrEmpty(message)"));
+            StringAssert.Contains("if (message == null)", source);
+        }
+
         private static string ReadPackageFile(string relativePath)
         {
             foreach (string root in CandidateRoots())

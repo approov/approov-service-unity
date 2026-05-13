@@ -299,7 +299,7 @@ namespace Approov
                 hasAnyValues = true;
                 if (!isFirst)
                 {
-                    builder.Append(',');
+                    builder.Append(", ");
                 }
 
                 builder.Append(value?.Trim() ?? string.Empty);

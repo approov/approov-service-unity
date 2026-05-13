@@ -333,7 +333,7 @@ namespace Approov
 
         public static string GetAccountMessageSignature(string message)
         {
-            if (string.IsNullOrEmpty(message))
+            if (message == null)
             {
                 return null;
             }
@@ -344,7 +344,7 @@ namespace Approov
 
         public static string GetInstallMessageSignature(string message)
         {
-            if (string.IsNullOrEmpty(message))
+            if (message == null)
             {
                 return null;
             }

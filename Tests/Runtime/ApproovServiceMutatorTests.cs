@@ -184,6 +184,14 @@ namespace Approov.Tests
         }
 
         [Test]
+        public void CombineHeaderValues_UsesHttpListSeparator()
+        {
+            string combined = ApproovRequestContext.CombineHeaderValues(new[] { "one", " two " });
+
+            Assert.That(combined, Is.EqualTo("one, two"));
+        }
+
+        [Test]
         public void AddSubstitutionQueryParam_RejectsNullOrWhitespaceKey()
         {
             Assert.Throws<System.ArgumentNullException>(() => ApproovService.AddSubstitutionQueryParam(null));

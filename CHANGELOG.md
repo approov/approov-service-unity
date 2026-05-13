@@ -18,6 +18,7 @@ The format is based on Keep a Changelog and this package follows Semantic Versio
 - UnityWebRequest mutator hooks now run on the coroutine path while native fetches stay off-thread, and custom mutators can request additional Unity headers to capture.
 - certificate pin validation now preserves the request authority so non-default HTTPS ports validate against the correct endpoint.
 - explicit token fetches now consume dynamic config updates, honor forced pin refresh results, and share the same native token-binding lock as intercepted requests.
+- message signing now uses the HTTP comma-space list separator for multi-value headers and iOS signing accepts empty message payloads.
 
 ## [1.0.0] - 2026-04-16
 
