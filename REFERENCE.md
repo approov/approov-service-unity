@@ -127,9 +127,9 @@ Exclusion rules should be used carefully. Excluding protected URLs can prevent n
 - `SetUserProperty(string property)`
   Publishes an informational user property into Approov telemetry for the current app instance.
 - `FetchSecureString(string key, string newDef)`
-  Looks up or defines an Approov secure string.
+  Looks up or defines an Approov secure string. The key must be non-empty and at most 64 characters; `newDef` may be `null`, and an empty `newDef` removes an app-instance secure string.
 - `FetchCustomJWT(string payload)`
-  Fetches a custom JWT for the supplied JSON payload.
+  Fetches a custom JWT for the supplied non-empty JSON payload.
 - `Precheck()`
   Performs an attestation precheck.
 - `GetDeviceID()`
@@ -137,26 +137,26 @@ Exclusion rules should be used carefully. Excluding protected URLs can prevent n
 - `SetDataHashInToken(string data)`
   Hashes caller-provided non-null data into subsequent token fetches. Passing `null` is rejected because the native SDK token-binding API requires a data value.
 - `FetchToken(string url)`
-  Performs an explicit token fetch for a URL when interceptor-based injection is not being used.
+  Performs an explicit token fetch for a non-empty URL when interceptor-based injection is not being used.
 - `GetPinsJSON(string pinType)`
-  Returns the current Approov pin set as JSON.
+  Returns the current Approov pin set as JSON for a non-empty pin type.
 - `FetchConfig()`
   Returns the currently cached or freshly fetched dynamic SDK configuration.
 - `SetDevKey(string key)`
   Sets a development key for controlled development and testing workflows only.
 - `GetIntegrityMeasurementProof(byte[] nonce, byte[] measurementConfig)`
-  Produces an integrity measurement proof using a previously returned measurement configuration.
+  Produces an integrity measurement proof using a 16-byte nonce and a previously returned measurement configuration.
 - `GetDeviceMeasurementProof(byte[] nonce, byte[] measurementConfig)`
-  Produces a device measurement proof using a previously returned measurement configuration.
+  Produces a device measurement proof using a 16-byte nonce and a previously returned measurement configuration.
 
 ### Message Signing Primitives
 
 - `GetMessageSignature(string message)`
   Obsolete alias for account signing.
 - `GetAccountMessageSignature(string message)`
-  Returns a base64-encoded account-key signature for the exact string payload supplied.
+  Returns a base64-encoded account-key signature for the exact non-null string payload supplied.
 - `GetInstallMessageSignature(string message)`
-  Returns a base64-encoded install-key signature for the exact string payload supplied.
+  Returns a base64-encoded install-key signature for the exact non-null string payload supplied.
 
 The `message` string is signed exactly as provided. Do not pre-hash it, normalize whitespace implicitly, or assume canonicalization by the package.
 

@@ -213,6 +213,57 @@ namespace Approov.Tests
         }
 
         [Test]
+        public void FetchToken_RejectsMissingUrl()
+        {
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.FetchToken(null));
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.FetchToken(" "));
+        }
+
+        [Test]
+        public void FetchSecureString_RejectsInvalidKeyBeforeNativeBridge()
+        {
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.FetchSecureString(null, null));
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.FetchSecureString(string.Empty, null));
+            Assert.Throws<System.ArgumentException>(() => ApproovService.FetchSecureString(new string('a', 65), null));
+        }
+
+        [Test]
+        public void FetchCustomJWT_RejectsMissingPayload()
+        {
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.FetchCustomJWT(null));
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.FetchCustomJWT(" "));
+        }
+
+        [Test]
+        public void GetPinsJSON_RejectsMissingPinType()
+        {
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.GetPinsJSON(null));
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.GetPinsJSON(" "));
+        }
+
+        [Test]
+        public void MessageSigning_RejectsNullMessage()
+        {
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.GetAccountMessageSignature(null));
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.GetInstallMessageSignature(null));
+        }
+
+        [Test]
+        public void MeasurementProofs_RejectInvalidInputsBeforeNativeBridge()
+        {
+            byte[] validNonce = new byte[16];
+            byte[] measurementConfig = new byte[] { 1, 2, 3 };
+
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.GetIntegrityMeasurementProof(null, measurementConfig));
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.GetIntegrityMeasurementProof(validNonce, null));
+            Assert.Throws<System.ArgumentException>(() => ApproovService.GetIntegrityMeasurementProof(new byte[15], measurementConfig));
+
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.GetDeviceMeasurementProof(null, measurementConfig));
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.GetDeviceMeasurementProof(validNonce, null));
+            Assert.Throws<System.ArgumentException>(() => ApproovService.GetDeviceMeasurementProof(new byte[15], measurementConfig));
+        }
+
+        [Test]
         public void DecodeSubstitutionQueryParameterValue_UnescapesPercentEncodedKey()
         {
             string decoded = ApproovRequestProcessor.DecodeSubstitutionQueryParameterValue("tenant%2Fprod%20api%2Bkey");

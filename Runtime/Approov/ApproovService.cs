@@ -1018,6 +1018,16 @@ namespace Approov
         */
         public static string FetchSecureString(string key, string newDef)
         {
+            if (string.IsNullOrEmpty(key))
+            {
+                throw new ArgumentNullException(nameof(key));
+            }
+
+            if (key.Length > 64)
+            {
+                throw new ArgumentException("Secure string key must not exceed 64 characters.", nameof(key));
+            }
+
             EnsureSDKInitialized("FetchSecureString");
             string type = "lookup";
             if (newDef != null)
@@ -1043,6 +1053,11 @@ namespace Approov
         */
         public static string FetchCustomJWT(string payload)
         {
+            if (string.IsNullOrWhiteSpace(payload))
+            {
+                throw new ArgumentNullException(nameof(payload));
+            }
+
             EnsureSDKInitialized("FetchCustomJWT");
             LogTrace(TAG + "FetchCustomJWT start payloadLength=" + (payload?.Length ?? 0));
             ApproovTokenFetchResult fetchResult;
@@ -1150,6 +1165,11 @@ namespace Approov
         /// </summary>
         public static string GetAccountMessageSignature(string message)
         {
+            if (message == null)
+            {
+                throw new ArgumentNullException(nameof(message));
+            }
+
             EnsureSDKInitialized("GetAccountMessageSignature");
             LogTrace(TAG + "GetAccountMessageSignature start messageLength=" + (message?.Length ?? 0));
             string signature = ApproovBridge.GetAccountMessageSignature(message);
@@ -1166,6 +1186,11 @@ namespace Approov
         /// </summary>
         public static string GetInstallMessageSignature(string message)
         {
+            if (message == null)
+            {
+                throw new ArgumentNullException(nameof(message));
+            }
+
             EnsureSDKInitialized("GetInstallMessageSignature");
             LogTrace(TAG + "GetInstallMessageSignature start messageLength=" + (message?.Length ?? 0));
             string signature = ApproovBridge.GetInstallMessageSignature(message);
@@ -1192,6 +1217,11 @@ namespace Approov
 
         public static string FetchToken(string url)
         {
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                throw new ArgumentNullException(nameof(url));
+            }
+
             EnsureSDKInitialized("FetchToken");
             LogTrace(TAG + "FetchToken start url=" + url);
             // Invoke fetchApproovTokenAndWait
@@ -1209,6 +1239,12 @@ namespace Approov
         /// </summary>
         public static string GetPinsJSON(string pinType)
         {   
+            if (string.IsNullOrWhiteSpace(pinType))
+            {
+                throw new ArgumentNullException(nameof(pinType));
+            }
+
+            EnsureSDKInitialized("GetPinsJSON");
             string approovPinsJNI = ApproovBridge.GetPinsJSON(pinType);
             return approovPinsJNI;
         }
@@ -1270,6 +1306,8 @@ namespace Approov
         * @return 32-byte (256-bit) measurement proof value
         */
         public static byte[] GetIntegrityMeasurementProof(byte[] nonce, byte[] measurementConfig) {
+            ValidateMeasurementProofInputs(nonce, measurementConfig);
+            EnsureSDKInitialized("GetIntegrityMeasurementProof");
             byte[] proof = ApproovBridge.GetIntegrityMeasurementProof(nonce, measurementConfig);
             return proof;
         }
@@ -1287,8 +1325,28 @@ namespace Approov
         * @return 32-byte (256-bit) measurement proof value
         */
         public static byte[] GetDeviceMeasurementProof(byte[] nonce, byte[] measurementConfig) {
+            ValidateMeasurementProofInputs(nonce, measurementConfig);
+            EnsureSDKInitialized("GetDeviceMeasurementProof");
             byte[] proof = ApproovBridge.GetDeviceMeasurementProof(nonce, measurementConfig);
             return proof;
+        }
+
+        private static void ValidateMeasurementProofInputs(byte[] nonce, byte[] measurementConfig)
+        {
+            if (nonce == null)
+            {
+                throw new ArgumentNullException(nameof(nonce));
+            }
+
+            if (measurementConfig == null)
+            {
+                throw new ArgumentNullException(nameof(measurementConfig));
+            }
+
+            if (nonce.Length != 16)
+            {
+                throw new ArgumentException("Nonce must be 16 bytes.", nameof(nonce));
+            }
         }
 
         internal static bool ShouldApplyPinning(ApproovRequestContext request)
