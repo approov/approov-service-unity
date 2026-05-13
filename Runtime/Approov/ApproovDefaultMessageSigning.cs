@@ -175,6 +175,37 @@ namespace Approov
                 return this;
             }
 
+            internal void AddUnityRequestHeadersToCapture(ISet<string> headers)
+            {
+                if (headers == null)
+                {
+                    return;
+                }
+
+                IReadOnlyList<string> baseComponents = _baseParameters?.ComponentIdentifiers;
+                if (baseComponents != null)
+                {
+                    for (int i = 0; i < baseComponents.Count; i++)
+                    {
+                        AddHeaderIfComponent(headers, baseComponents[i]);
+                    }
+                }
+
+                for (int i = 0; i < _optionalHeaders.Count; i++)
+                {
+                    AddHeaderIfComponent(headers, _optionalHeaders[i]);
+                }
+            }
+
+            private static void AddHeaderIfComponent(ISet<string> headers, string componentIdentifier)
+            {
+                if (!string.IsNullOrWhiteSpace(componentIdentifier) &&
+                    !componentIdentifier.StartsWith("@", StringComparison.Ordinal))
+                {
+                    headers.Add(componentIdentifier);
+                }
+            }
+
             private SignaturePlan BuildSignaturePlan(ApproovRequestContext request, ApproovRequestMutations changes)
             {
                 List<SignatureComponent> components = new();
@@ -338,6 +369,15 @@ namespace Approov
         public override string ToString()
         {
             return "ApproovDefaultMessageSigning";
+        }
+
+        internal override void AddUnityRequestHeadersToCapture(ISet<string> headers)
+        {
+            DefaultFactory?.AddUnityRequestHeadersToCapture(headers);
+            foreach (SignatureParametersFactory factory in _hostFactories.Values)
+            {
+                factory?.AddUnityRequestHeadersToCapture(headers);
+            }
         }
 
         public override void HandleProcessedRequest(ApproovRequestContext request, ApproovRequestMutations changes)

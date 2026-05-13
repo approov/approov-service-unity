@@ -598,13 +598,19 @@ public class ShapesApp : MonoBehaviour
     {
         ShapesEndpointMetadata metadata = GetEndpointMetadata(GetSelectedEndpoint());
         UnityWebRequest request = CreateUnityWebRequest(requestKind, metadata);
-        UnityWebRequestAsyncOperation operation;
+        IEnumerator approovSendRoutine = null;
+        UnityWebRequestAsyncOperation operation = null;
 
         try
         {
-            operation = IsApproovEnabled()
-                ? ApproovService.SendWebRequest(request)
-                : request.SendWebRequest();
+            if (IsApproovEnabled())
+            {
+                approovSendRoutine = request.SendApproovWebRequest();
+            }
+            else
+            {
+                operation = request.SendWebRequest();
+            }
         }
         catch (Exception exception)
         {
@@ -618,7 +624,39 @@ public class ShapesApp : MonoBehaviour
             yield break;
         }
 
-        yield return operation;
+        if (approovSendRoutine != null)
+        {
+            while (true)
+            {
+                object current;
+                try
+                {
+                    if (!approovSendRoutine.MoveNext())
+                    {
+                        break;
+                    }
+
+                    current = approovSendRoutine.Current;
+                }
+                catch (Exception exception)
+                {
+                    request.Dispose();
+                    onComplete?.Invoke(new SampleRequestResult
+                    {
+                        IsSuccess = false,
+                        Error = FormatExceptionMessage(exception),
+                        Diagnostics = exception.ToString(),
+                    });
+                    yield break;
+                }
+
+                yield return current;
+            }
+        }
+        else
+        {
+            yield return operation;
+        }
 
         SampleRequestResult result = BuildUnityWebRequestResult(request);
         request.Dispose();

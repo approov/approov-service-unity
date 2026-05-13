@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Approov
 {
@@ -224,6 +225,10 @@ namespace Approov
         public virtual bool ShouldProcessPinning(ApproovRequestContext request)
         {
             return true;
+        }
+
+        internal virtual void AddUnityRequestHeadersToCapture(ISet<string> headers)
+        {
         }
     }
 }

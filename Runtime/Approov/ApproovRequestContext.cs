@@ -174,6 +174,33 @@ namespace Approov
                 null);
         }
 
+        internal static ApproovRequestContext CreateMutableSnapshot(
+            UnityWebRequest request,
+            Dictionary<string, string> snapshotHeaders,
+            Action<string, string> setHeader,
+            Action<Uri> setUri)
+        {
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request));
+            }
+
+            Dictionary<string, string> headers = snapshotHeaders == null
+                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, string>(snapshotHeaders, StringComparer.OrdinalIgnoreCase);
+
+            return new ApproovRequestContext(
+                ApproovRequestTransport.UnityWebRequest,
+                request.method,
+                request.uri ?? CreateUri(request.url),
+                null,
+                setHeader,
+                setUri,
+                null,
+                headers,
+                TryGetUnityBodyBytes(request));
+        }
+
         internal static ApproovRequestContext Create(HttpRequestMessage request)
         {
             if (request == null)

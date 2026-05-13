@@ -1,16 +1,63 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using UnityEngine.Networking;
 
 namespace Approov
 {
     internal static class ApproovRequestProcessor
     {
+        private static readonly object NativeRequestLock = new();
+
         public static void ApplyToUnityWebRequest(UnityWebRequest request)
         {
             Apply(ApproovRequestContext.Create(request));
+        }
+
+        public static IEnumerator ApplyToUnityWebRequestAsync(UnityWebRequest request)
+        {
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request));
+            }
+
+            Dictionary<string, string> capturedHeaders = CaptureUnityRequestHeaders(request);
+            Dictionary<string, string> headersToSet = new(StringComparer.OrdinalIgnoreCase);
+            Uri updatedUri = null;
+            ApproovRequestContext backgroundContext = ApproovRequestContext.CreateMutableSnapshot(
+                request,
+                capturedHeaders,
+                (header, value) => headersToSet[header] = value,
+                uri => updatedUri = uri);
+
+            Task task = Task.Run(() => Apply(backgroundContext));
+            while (!task.IsCompleted)
+            {
+                yield return null;
+            }
+
+            if (task.IsFaulted)
+            {
+                throw task.Exception.InnerException ?? task.Exception;
+            }
+
+            if (task.IsCanceled)
+            {
+                throw new TaskCanceledException(task);
+            }
+
+            foreach (KeyValuePair<string, string> header in headersToSet)
+            {
+                request.SetRequestHeader(header.Key, header.Value);
+            }
+
+            if (updatedUri != null && !string.Equals(updatedUri.AbsoluteUri, request.url, StringComparison.Ordinal))
+            {
+                request.uri = updatedUri;
+            }
         }
 
         public static void ApplyToHttpRequestMessage(HttpRequestMessage request)
@@ -40,6 +87,17 @@ namespace Approov
             string requestUrl = request.Uri?.AbsoluteUri;
             ApproovService.LogTrace("ApproovRequestProcessor Apply start url=" + requestUrl);
 
+            // The native SDK keeps token-binding input as process-wide state. Serialize the
+            // full native request mutation pass so concurrent requests cannot bind or substitute
+            // values with another request's SDK state.
+            lock (NativeRequestLock)
+            {
+                ApplyWithNativeState(request, mutator, requestUrl);
+            }
+        }
+
+        private static void ApplyWithNativeState(ApproovRequestContext request, ApproovServiceMutator mutator, string requestUrl)
+        {
             string bindingHeader = ApproovService.GetBindingHeader();
             if (!string.IsNullOrWhiteSpace(bindingHeader))
             {
@@ -198,6 +256,55 @@ namespace Approov
             else
             {
                 changes.SubstitutionQueryParamKeys = updatedKeys ?? new List<string>();
+            }
+        }
+
+        private static Dictionary<string, string> CaptureUnityRequestHeaders(UnityWebRequest request)
+        {
+            HashSet<string> headerNames = new(StringComparer.OrdinalIgnoreCase)
+            {
+                "Accept",
+                "Api-Key",
+                "Authorization",
+                "Content-Digest",
+                "Content-Type",
+                "Signature",
+                "Signature-Input",
+            };
+
+            // UnityWebRequest cannot enumerate caller-set headers, so capture the headers
+            // the built-in mutators and samples need before moving native work off-thread.
+            headerNames.Add(ApproovService.GetTokenHeader());
+            headerNames.Add(ApproovService.GetApproovTraceIDHeader());
+            headerNames.Add(ApproovService.GetBindingHeader());
+
+            foreach (KeyValuePair<string, string> substitutionHeader in ApproovService.GetSubstitutionHeaders())
+            {
+                headerNames.Add(substitutionHeader.Key);
+            }
+
+            ApproovService.GetServiceMutator().AddUnityRequestHeadersToCapture(headerNames);
+
+            Dictionary<string, string> headers = new(StringComparer.OrdinalIgnoreCase);
+            foreach (string header in headerNames)
+            {
+                CaptureUnityHeader(request, headers, header);
+            }
+
+            return headers;
+        }
+
+        private static void CaptureUnityHeader(UnityWebRequest request, Dictionary<string, string> headers, string header)
+        {
+            if (string.IsNullOrWhiteSpace(header) || headers.ContainsKey(header))
+            {
+                return;
+            }
+
+            string value = request.GetRequestHeader(header);
+            if (value != null)
+            {
+                headers[header] = value;
             }
         }
     }

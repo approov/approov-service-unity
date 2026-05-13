@@ -18,5 +18,5 @@ For `UnityWebRequest` integrations, the recommended pattern is now:
 
 ```csharp
 UnityWebRequest request = UnityWebRequest.Get(url);
-yield return ApproovService.SendWebRequest(request);
+yield return request.SendApproovWebRequest();
 ```

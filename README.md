@@ -56,12 +56,12 @@ using Approov;
 using UnityEngine.Networking;
 
 UnityWebRequest request = UnityWebRequest.Get("https://approov.io");
-yield return ApproovService.SendWebRequest(request);
+yield return request.SendApproovWebRequest();
 ```
 
-Use `ApproovService.SendWebRequest(...)` as the primary UnityWebRequest integration surface. It applies request mutation, token injection, secure-string substitution, and Approov certificate validation before dispatch.
+Use `request.SendApproovWebRequest()` as the primary UnityWebRequest integration surface. It applies request mutation, token injection, secure-string substitution, and Approov certificate validation before dispatch without blocking the Unity main thread during native token fetches.
 
-`ApproovWebRequest` remains available for compatibility, but it should not be the primary documented path because Unity method hiding can bypass Approov processing if the instance is handled through a `UnityWebRequest` reference.
+`ApproovService.SendWebRequest(...)` and `ApproovWebRequest` remain available for compatibility, but they should not be the primary documented path because legacy immediate-send APIs run Approov preprocessing before returning Unity's request operation.
 
 ## Use With HttpClient
 
@@ -83,7 +83,7 @@ HttpResponseMessage response = await client.GetAsync("https://approov.io");
 
 - The Android bridge is packaged as `Plugins/Android/ApproovUnity.androidlib`.
 - Its Gradle file declares the Approov Android SDK and OkHttp Maven dependencies for you.
-- The package enforces Android `minSdkVersion` 23 or higher at build time.
+- The package enforces Android `minSdkVersion` 25 or higher at build time.
 - No manual `mainTemplate.gradle`, manifest, or `.aar` copy step is required for the Approov SDK itself.
 
 ### iOS
@@ -168,5 +168,5 @@ The old flow asked users to copy `Assets/` into their project and manually fetch
 
 - This package is intended only for mobile apps iOS/Android projects
 - Unity 2022 LTS or Unity 6000
-- Android builds require project min SDK 23 or higher
+- Android builds require project min SDK 25 or higher
 - iOS uses `Approov.xcframework`

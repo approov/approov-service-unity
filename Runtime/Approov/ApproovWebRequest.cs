@@ -8,7 +8,7 @@ namespace Approov
     /// certificate validation and forwards send operations through <see cref="ApproovService"/>.
     /// </summary>
     /// <remarks>
-    /// New integrations should generally prefer <see cref="ApproovService.SendWebRequest(UnityWebRequest)"/>
+    /// New integrations should generally prefer <see cref="UnityWebRequestApproovExtensions.SendApproovWebRequest(UnityWebRequest)"/>
     /// because Unity method hiding can bypass this wrapper when the instance is later treated as a
     /// plain <see cref="UnityWebRequest"/>.
     /// </remarks>

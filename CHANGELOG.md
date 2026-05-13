@@ -4,6 +4,15 @@ All notable changes to this package are documented in this file.
 
 The format is based on Keep a Changelog and this package follows Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+
+- `UnityWebRequest.SendApproovWebRequest()` now runs token fetch and request mutation work through a coroutine-backed background task before dispatch.
+- native request mutation is serialized while using SDK-global token-binding state.
+- Android minimum SDK enforcement now uses API 25 consistently with current Unity Android support.
+- fallback integer token-status mapping now preserves `NOT_INITIALIZED` instead of shifting later statuses.
+
 ## [1.0.0] - 2026-04-16
 
 ### Added

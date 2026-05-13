@@ -227,7 +227,29 @@ namespace Approov
         */
         public static UnityWebRequestAsyncOperation SendWebRequest(UnityWebRequest request)
         {
-            EnsureSDKInitialized("SendWebRequest");
+            PrepareUnityWebRequest(request, "SendWebRequest");
+            LogTrace(TAG + "SendWebRequest applying Approov processing to " + request.url);
+            ApproovRequestProcessor.ApplyToUnityWebRequest(request);
+            ApplyUnityWebRequestPinning(request, "SendWebRequest");
+            return request.SendWebRequest();
+        }
+
+        /// <summary>
+        /// Applies Approov protection to a UnityWebRequest without blocking the Unity main thread
+        /// while the native SDK fetches tokens or secure-string substitutions.
+        /// </summary>
+        public static System.Collections.IEnumerator SendWebRequestCoroutine(UnityWebRequest request)
+        {
+            PrepareUnityWebRequest(request, "SendWebRequestCoroutine");
+            LogTrace(TAG + "SendWebRequestCoroutine applying Approov processing to " + request.url);
+            yield return ApproovRequestProcessor.ApplyToUnityWebRequestAsync(request);
+            ApplyUnityWebRequestPinning(request, "SendWebRequestCoroutine");
+            yield return request.SendWebRequest();
+        }
+
+        private static void PrepareUnityWebRequest(UnityWebRequest request, string operation)
+        {
+            EnsureSDKInitialized(operation);
 
             if (request == null)
             {
@@ -237,12 +259,12 @@ namespace Approov
             if (request.downloadHandler == null)
             {
                 request.downloadHandler = new DownloadHandlerBuffer();
-                LogTrace(TAG + "SendWebRequest attached DownloadHandlerBuffer");
+                LogTrace(TAG + operation + " attached DownloadHandlerBuffer");
             }
+        }
 
-            LogTrace(TAG + "SendWebRequest applying Approov processing to " + request.url);
-            ApproovRequestProcessor.ApplyToUnityWebRequest(request);
-
+        private static void ApplyUnityWebRequestPinning(UnityWebRequest request, string operation)
+        {
             ApproovRequestContext pinningContext = ApproovRequestContext.CreateSnapshot(request);
             if (ShouldApplyPinning(pinningContext))
             {
@@ -251,7 +273,7 @@ namespace Approov
                     CertificateHandler oldHandler = request.certificateHandler;
                     request.certificateHandler = new ApproovCertificateHandler(request);
                     oldHandler?.Dispose();
-                    LogTrace(TAG + "SendWebRequest refreshed ApproovCertificateHandler");
+                    LogTrace(TAG + operation + " refreshed ApproovCertificateHandler");
                 }
             }
             else if (request.certificateHandler is ApproovCertificateHandler)
@@ -259,10 +281,8 @@ namespace Approov
                 CertificateHandler oldHandler = request.certificateHandler;
                 request.certificateHandler = null;
                 oldHandler.Dispose();
-                LogTrace(TAG + "SendWebRequest removed ApproovCertificateHandler because pinning was skipped by mutator");
+                LogTrace(TAG + operation + " removed ApproovCertificateHandler because pinning was skipped by mutator");
             }
-
-            return request.SendWebRequest();
         }
 
         /**

@@ -51,15 +51,17 @@ Recommended usage:
 
 ```csharp
 UnityWebRequest request = UnityWebRequest.Get("https://example.com");
-yield return ApproovService.SendWebRequest(request);
+yield return request.SendApproovWebRequest();
 ```
 
 Members:
 
+- `SendApproovWebRequest(this UnityEngine.Networking.UnityWebRequest request)`
+  Coroutine-friendly extension that applies token injection, secure-string substitution, optional trace header mutation, and Approov certificate validation before dispatching the request without blocking the Unity main thread during native token fetches.
 - `SendWebRequest(UnityEngine.Networking.UnityWebRequest request)`
-  Applies token injection, secure-string substitution, optional trace header mutation, and Approov certificate validation before dispatching the request.
+  Legacy compatibility path that applies the same request protection before dispatching the request and returns Unity's `UnityWebRequestAsyncOperation`.
 
-`ApproovService.SendWebRequest(...)` is the preferred UnityWebRequest path. `ApproovWebRequest` remains available for compatibility, but Unity method hiding can bypass Approov processing if the request is later handled through a plain `UnityWebRequest` reference.
+`request.SendApproovWebRequest()` is the preferred UnityWebRequest path. `ApproovWebRequest` remains available for compatibility, but Unity method hiding can bypass Approov processing if the request is later handled through a plain `UnityWebRequest` reference.
 
 ### HttpClient Integration
 
@@ -169,7 +171,7 @@ Supported members include:
 
 Preferred guidance:
 
-- use `ApproovService.SendWebRequest(...)` for new integrations
+- use `request.SendApproovWebRequest()` for new integrations
 - use `ApproovWebRequest` only when the compatibility wrapper is specifically useful in existing code
 
 ## ApproovHttpClientHandler
@@ -379,5 +381,5 @@ The native bridge is an internal package detail. It is intentionally not part of
 
 ## Platform Requirements
 
-- Android builds require `minSdkVersion` 23 or higher because the packaged Android integration targets API 23+.
+- Android builds require `minSdkVersion` 25 or higher because the packaged Android integration targets API 25+.
 - The upstream Approov iOS SDK requires iOS 12 or higher.
