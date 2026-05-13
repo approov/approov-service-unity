@@ -74,7 +74,20 @@ namespace Approov
             if (innerHandler is HttpClientHandler httpClientHandler)
             {
                 // Hook Approov pin evaluation only when we have direct access to the TLS callback.
-                httpClientHandler.ServerCertificateCustomValidationCallback = ValidateServerCertificate;
+                Func<HttpRequestMessage, X509Certificate2, X509Chain, SslPolicyErrors, bool> existingCallback =
+                    httpClientHandler.ServerCertificateCustomValidationCallback;
+                httpClientHandler.ServerCertificateCustomValidationCallback = existingCallback == null
+                    ? ValidateServerCertificate
+                    : (requestMessage, certificate, chain, sslPolicyErrors) =>
+                    {
+                        if (!existingCallback(requestMessage, certificate, chain, sslPolicyErrors))
+                        {
+                            ApproovService.LogTrace("ApproovHttpClientHandler ValidateServerCertificate denied by existing callback");
+                            return false;
+                        }
+
+                        return ValidateServerCertificate(requestMessage, certificate, chain, sslPolicyErrors);
+                    };
             }
 
             return innerHandler;
