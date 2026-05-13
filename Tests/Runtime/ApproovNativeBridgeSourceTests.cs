@@ -39,6 +39,17 @@ namespace Approov.Tests
             StringAssert.Contains("[Approov setDataHashInToken:dataString];", source);
         }
 
+        [Test]
+        public void AndroidTokenFetchFallback_ReportsInternalError()
+        {
+            string source = ReadPackageFile("Plugins/Android/ApproovUnity.androidlib/src/main/java/io/approov/unity/service/ApproovUnityBridge.java");
+
+            StringAssert.Contains(
+                "private static final String INTERNAL_ERROR_RESULT_JSON = \"{\\\"status\\\":11,\\\"statusString\\\":\\\"INTERNAL_ERROR\\\"}\";",
+                source);
+            Assert.That(source, Does.Not.Contain("return \"{\\\"status\\\":10}\";"));
+        }
+
         private static string ReadPackageFile(string relativePath)
         {
             foreach (string root in CandidateRoots())

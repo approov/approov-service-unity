@@ -33,6 +33,7 @@ public final class ApproovUnityBridge {
     private static final String TAG = "ApproovUnityBridge: ";
     private static final int FETCH_CERTIFICATES_TIMEOUT_MS = 3000;
     private static final String SUCCESS = "SUCCESS";
+    private static final String INTERNAL_ERROR_RESULT_JSON = "{\"status\":11,\"statusString\":\"INTERNAL_ERROR\"}";
     private static final int APPROOV_CERT_CACHE_SIZE = 10;
     private static final HashMap<String, byte[]> approovCertCache = new HashMap<>(APPROOV_CERT_CACHE_SIZE);
     private static final ReadWriteLock certCacheLock = new ReentrantReadWriteLock();
@@ -195,7 +196,7 @@ public final class ApproovUnityBridge {
 
     private static String tokenFetchResultToJson(Approov.TokenFetchResult result) {
         if (result == null) {
-            return "{\"status\":10}";
+            return INTERNAL_ERROR_RESULT_JSON;
         }
 
         JSONObject json = new JSONObject();
@@ -220,7 +221,7 @@ public final class ApproovUnityBridge {
                 json.put("measurementConfig", measurementArray);
             }
         } catch (JSONException exception) {
-            return "{\"status\":10}";
+            return INTERNAL_ERROR_RESULT_JSON;
         }
 
         return json.toString();
