@@ -1,7 +1,9 @@
 using System.IO;
 using System.Net.Http;
+using System.Reflection;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using UnityEngine.Networking;
 
 namespace Approov.Tests
 {
@@ -18,6 +20,14 @@ namespace Approov.Tests
             {
                 length = -1;
                 return false;
+            }
+        }
+
+        private sealed class CustomCertificateHandler : CertificateHandler
+        {
+            protected override bool ValidateCertificate(byte[] certificateData)
+            {
+                return true;
             }
         }
 
@@ -221,6 +231,21 @@ namespace Approov.Tests
         {
             Assert.Throws<System.ArgumentException>(() => ApproovService.AddExclusionURLRegex("["));
             Assert.Throws<System.ArgumentException>(() => ApproovService.RemoveExclusionURLRegex("["));
+        }
+
+        [Test]
+        public void ApplyUnityWebRequestPinning_ReplacesExistingCertificateHandler()
+        {
+            using UnityWebRequest request = UnityWebRequest.Get("https://api.example.com");
+            request.certificateHandler = new CustomCertificateHandler();
+
+            MethodInfo applyPinning = typeof(ApproovService).GetMethod(
+                "ApplyUnityWebRequestPinning",
+                BindingFlags.NonPublic | BindingFlags.Static);
+
+            applyPinning.Invoke(null, new object[] { request, "test" });
+
+            Assert.That(request.certificateHandler, Is.TypeOf<ApproovCertificateHandler>());
         }
     }
 }

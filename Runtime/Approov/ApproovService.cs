@@ -257,13 +257,15 @@ namespace Approov
             ApproovRequestContext pinningContext = ApproovRequestContext.CreateSnapshot(request);
             if (ShouldApplyPinning(pinningContext))
             {
-                if (request.certificateHandler == null || request.certificateHandler is ApproovCertificateHandler)
+                CertificateHandler oldHandler = request.certificateHandler;
+                if (oldHandler != null && !(oldHandler is ApproovCertificateHandler))
                 {
-                    CertificateHandler oldHandler = request.certificateHandler;
-                    request.certificateHandler = new ApproovCertificateHandler(request);
-                    oldHandler?.Dispose();
-                    LogTrace(TAG + operation + " refreshed ApproovCertificateHandler");
+                    LogWarning(TAG + operation + " replaced existing CertificateHandler with ApproovCertificateHandler so Approov pinning cannot be bypassed");
                 }
+
+                request.certificateHandler = new ApproovCertificateHandler(request);
+                oldHandler?.Dispose();
+                LogTrace(TAG + operation + " refreshed ApproovCertificateHandler");
             }
             else if (request.certificateHandler is ApproovCertificateHandler)
             {
