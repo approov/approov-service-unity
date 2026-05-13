@@ -111,6 +111,7 @@ ApproovService.SetServiceMutator(signer);
 ```
 
 The default signer adds `Signature` and `Signature-Input` headers only after an Approov token has been added to the request. It signs `@method`, `@target-uri`, the Approov token header, the optional trace header, selected request headers, and `Content-Digest` when the body is readable.
+If signing is configured for a tokenized request but the SDK cannot produce a signature, the request fails rather than being sent unsigned.
 
 Use message signing only on routes whose backend verifier is configured for the chosen signing mode. The package can produce both install-key signatures and account-key signatures, but server-side verification material and acceptance policy are outside the package.
 

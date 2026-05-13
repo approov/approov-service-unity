@@ -404,8 +404,7 @@ namespace Approov
             string signatureBase = BuildSignatureBase(request, plan);
             if (!TryGetSignatureBytes(plan.Mode, signatureBase, out string signatureLabel, out byte[] signatureBytes))
             {
-                ApproovService.LogTrace("ApproovDefaultMessageSigning: no signature bytes available for " + request.Uri);
-                return;
+                throw new ConfigurationFailureException("ApproovDefaultMessageSigning: no signature bytes available for " + request.Uri);
             }
 
             // Both headers are encoded as RFC 8941 structured fields so the verifier can reconstruct
@@ -490,8 +489,7 @@ namespace Approov
             }
             catch (ApproovException ex)
             {
-                ApproovService.LogTrace("ApproovDefaultMessageSigning: skipping request signature because " + ex.Message);
-                return false;
+                throw new ConfigurationFailureException("ApproovDefaultMessageSigning: signature generation failed - " + ex.Message);
             }
             catch (FormatException ex)
             {

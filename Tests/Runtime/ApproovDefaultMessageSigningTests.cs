@@ -22,6 +22,16 @@ namespace Approov.Tests
             }
         }
 
+        private sealed class UnavailableSigner : ApproovDefaultMessageSigning
+        {
+            protected override bool TryGetSignatureBytes(SigningMode mode, string message, out string signatureLabel, out byte[] signatureBytes)
+            {
+                signatureLabel = mode == SigningMode.Account ? "account" : "install";
+                signatureBytes = null;
+                return false;
+            }
+        }
+
         [Test]
         public void HandleProcessedRequest_AddsInstallSignatureHeaders()
         {
@@ -202,6 +212,26 @@ namespace Approov.Tests
                 TokenHeaderKey = "Approov-Token"
             });
 
+            Assert.False(request.Headers.Contains("Signature"));
+            Assert.False(request.Headers.Contains("Signature-Input"));
+        }
+
+        [Test]
+        public void HandleProcessedRequest_ThrowsWhenSignatureBytesUnavailable()
+        {
+            HttpRequestMessage request = new(HttpMethod.Get, "https://api.example.com/v1/test");
+            request.Headers.TryAddWithoutValidation("Approov-Token", "token-value");
+
+            UnavailableSigner signer = new UnavailableSigner();
+            signer.SetDefaultFactory(ApproovDefaultMessageSigning.GenerateDefaultSignatureParametersFactory());
+
+            ConfigurationFailureException exception = Assert.Throws<ConfigurationFailureException>(() =>
+                signer.HandleProcessedRequest(ApproovRequestContext.Create(request), new ApproovRequestMutations
+                {
+                    TokenHeaderKey = "Approov-Token"
+                }));
+
+            StringAssert.Contains("no signature bytes available", exception.Message);
             Assert.False(request.Headers.Contains("Signature"));
             Assert.False(request.Headers.Contains("Signature-Input"));
         }
