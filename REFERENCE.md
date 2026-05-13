@@ -135,7 +135,7 @@ Exclusion rules should be used carefully. Excluding protected URLs can prevent n
 - `GetDeviceID()`
   Returns the current Approov device identifier for this app installation.
 - `SetDataHashInToken(string data)`
-  Hashes caller-provided data into subsequent token fetches.
+  Hashes caller-provided non-null data into subsequent token fetches. Passing `null` is rejected because the native SDK token-binding API requires a data value.
 - `FetchToken(string url)`
   Performs an explicit token fetch for a URL when interceptor-based injection is not being used.
 - `GetPinsJSON(string pinType)`

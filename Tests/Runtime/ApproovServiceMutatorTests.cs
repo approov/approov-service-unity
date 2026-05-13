@@ -207,6 +207,12 @@ namespace Approov.Tests
         }
 
         [Test]
+        public void SetDataHashInToken_RejectsNullData()
+        {
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.SetDataHashInToken(null));
+        }
+
+        [Test]
         public void DecodeSubstitutionQueryParameterValue_UnescapesPercentEncodedKey()
         {
             string decoded = ApproovRequestProcessor.DecodeSubstitutionQueryParameterValue("tenant%2Fprod%20api%2Bkey");

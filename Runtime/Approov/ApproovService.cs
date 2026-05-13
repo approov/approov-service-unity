@@ -867,7 +867,15 @@ namespace Approov
             lock (NativeStateLock)
             {
                 string explicitDataHash = DataHashInToken;
-                ApproovBridge.SetDataHashInToken(restoreExplicitDataHash ? bindingValue : explicitDataHash);
+                if (restoreExplicitDataHash)
+                {
+                    ApproovBridge.SetDataHashInToken(bindingValue);
+                }
+                else if (explicitDataHash != null)
+                {
+                    ApproovBridge.SetDataHashInToken(explicitDataHash);
+                }
+
                 try
                 {
                     ApproovTokenFetchResult fetchResult = ApproovBridge.FetchApproovTokenAndWait(url);
@@ -876,7 +884,7 @@ namespace Approov
                 }
                 finally
                 {
-                    if (restoreExplicitDataHash)
+                    if (restoreExplicitDataHash && explicitDataHash != null)
                     {
                         ApproovBridge.SetDataHashInToken(explicitDataHash);
                     }
@@ -1105,6 +1113,11 @@ namespace Approov
         */
         public static void SetDataHashInToken(string data)
         {
+            if (data == null)
+            {
+                throw new ArgumentNullException(nameof(data));
+            }
+
             LogTrace(TAG + "SetDataHashInToken valueLength=" + (data?.Length ?? 0));
             LogTrace(TAG + "SetDataHashInToken");
             lock (NativeStateLock)
