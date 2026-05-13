@@ -165,7 +165,7 @@ namespace Approov
             return new ApproovRequestContext(
                 ApproovRequestTransport.UnityWebRequest,
                 request.method,
-                request.uri ?? CreateUri(request.url),
+                CreateUnityUri(request),
                 request.GetRequestHeader,
                 request.SetRequestHeader,
                 uri => request.uri = uri,
@@ -192,7 +192,7 @@ namespace Approov
             return new ApproovRequestContext(
                 ApproovRequestTransport.UnityWebRequest,
                 request.method,
-                request.uri ?? CreateUri(request.url),
+                CreateUnityUri(request),
                 null,
                 setHeader,
                 setUri,
@@ -237,7 +237,7 @@ namespace Approov
             return new ApproovRequestContext(
                 ApproovRequestTransport.Snapshot,
                 request.method,
-                request.uri ?? CreateUri(request.url),
+                CreateUnityUri(request),
                 null,
                 null,
                 null,
@@ -384,7 +384,54 @@ namespace Approov
 
         private static Uri CreateUri(string url)
         {
-            return string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out Uri uri) ? null : uri;
+            return string.IsNullOrWhiteSpace(url) ||
+                ContainsAsciiWhitespace(url) ||
+                !Uri.TryCreate(url, UriKind.Absolute, out Uri uri)
+                    ? null
+                    : uri;
+        }
+
+        private static Uri CreateUnityUri(UnityWebRequest request)
+        {
+            string url = TryGetUnityUrl(request);
+            return string.IsNullOrWhiteSpace(url) ? TryGetUnityUri(request) : CreateUri(url);
+        }
+
+        private static string TryGetUnityUrl(UnityWebRequest request)
+        {
+            try
+            {
+                return request.url;
+            }
+            catch (UriFormatException)
+            {
+                return null;
+            }
+        }
+
+        private static Uri TryGetUnityUri(UnityWebRequest request)
+        {
+            try
+            {
+                return request.uri;
+            }
+            catch (UriFormatException)
+            {
+                return null;
+            }
+        }
+
+        private static bool ContainsAsciiWhitespace(string value)
+        {
+            foreach (char character in value)
+            {
+                if (character == ' ' || character == '\t' || character == '\r' || character == '\n')
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

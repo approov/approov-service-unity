@@ -144,11 +144,9 @@ namespace Approov.Tests
         }
 
         [Test]
-        public void Create_ReturnsNullUriForMalformedUrl()
+        public void Create_ReturnsNullUriForUnsetUnityUrl()
         {
-            UnityEngine.Networking.UnityWebRequest request = new(
-                "not a valid url",
-                UnityEngine.Networking.UnityWebRequest.kHttpVerbGET);
+            UnityEngine.Networking.UnityWebRequest request = new();
 
             ApproovRequestContext context = ApproovRequestContext.Create(request);
 
