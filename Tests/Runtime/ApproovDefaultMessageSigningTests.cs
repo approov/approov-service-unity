@@ -217,7 +217,7 @@ namespace Approov.Tests
         }
 
         [Test]
-        public void HandleProcessedRequest_ThrowsWhenSignatureBytesUnavailable()
+        public void HandleProcessedRequest_SkipsSigningWhenSignatureBytesUnavailable()
         {
             HttpRequestMessage request = new(HttpMethod.Get, "https://api.example.com/v1/test");
             request.Headers.TryAddWithoutValidation("Approov-Token", "token-value");
@@ -225,13 +225,11 @@ namespace Approov.Tests
             UnavailableSigner signer = new UnavailableSigner();
             signer.SetDefaultFactory(ApproovDefaultMessageSigning.GenerateDefaultSignatureParametersFactory());
 
-            ConfigurationFailureException exception = Assert.Throws<ConfigurationFailureException>(() =>
-                signer.HandleProcessedRequest(ApproovRequestContext.Create(request), new ApproovRequestMutations
-                {
-                    TokenHeaderKey = "Approov-Token"
-                }));
+            signer.HandleProcessedRequest(ApproovRequestContext.Create(request), new ApproovRequestMutations
+            {
+                TokenHeaderKey = "Approov-Token"
+            });
 
-            StringAssert.Contains("no signature bytes available", exception.Message);
             Assert.False(request.Headers.Contains("Signature"));
             Assert.False(request.Headers.Contains("Signature-Input"));
         }

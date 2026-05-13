@@ -251,7 +251,7 @@ Members:
 ## ApproovDefaultMessageSigning
 
 `ApproovDefaultMessageSigning` is a ready-to-use `ApproovServiceMutator` that adds RFC 9421-style `Signature` and `Signature-Input` headers after Approov token injection.
-When a signing factory is selected and the SDK cannot produce signature bytes, the mutator throws instead of allowing a tokenized request to continue unsigned.
+When a signing factory is selected but the SDK cannot produce signature bytes, the mutator leaves the request unsigned.
 
 Key members:
 
