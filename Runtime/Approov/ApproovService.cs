@@ -1044,6 +1044,10 @@ namespace Approov
                 fetchResult = FetchCustomJWTWithNativeState(payload, "FetchCustomJWT");
                 aCurrentFetchStatus = fetchResult.status;
             }
+            catch (ApproovException)
+            {
+                throw;
+            }
             catch (Exception e)
             {
                 LogWarning(TAG + "FetchCustomJWT: " + e.Message);
