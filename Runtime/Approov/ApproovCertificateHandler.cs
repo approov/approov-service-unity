@@ -17,13 +17,12 @@ namespace Approov
         public ApproovCertificateHandler(UnityWebRequest request)
         {
             // Certificate validation runs off the main thread, so cache any UnityWebRequest state here.
-            requestUrl = request?.url ?? string.Empty;
             requestContext = request == null ? null : ApproovRequestContext.CreateSnapshot(request);
+            requestUrl = requestContext?.Uri?.AbsoluteUri ?? string.Empty;
 
-            if (!string.IsNullOrWhiteSpace(requestUrl) &&
-                Uri.TryCreate(requestUrl, UriKind.Absolute, out Uri uri))
+            if (requestContext?.Uri != null)
             {
-                authority = uri.Authority;
+                authority = requestContext.Uri.Authority;
             }
             else
             {

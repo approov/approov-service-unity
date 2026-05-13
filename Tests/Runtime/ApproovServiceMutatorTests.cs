@@ -304,5 +304,21 @@ namespace Approov.Tests
 
             Assert.That(request.certificateHandler, Is.TypeOf<ApproovCertificateHandler>());
         }
+
+        [Test]
+        public void ApproovCertificateHandler_ConstructsForUnsetUnityRequestUrl()
+        {
+            using UnityWebRequest request = new();
+            ApproovCertificateHandler handler = null;
+
+            try
+            {
+                Assert.DoesNotThrow(() => handler = new ApproovCertificateHandler(request));
+            }
+            finally
+            {
+                handler?.Dispose();
+            }
+        }
     }
 }
