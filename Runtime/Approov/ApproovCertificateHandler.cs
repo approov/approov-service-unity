@@ -35,6 +35,12 @@ namespace Approov
         {
             ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: validating certificate for " + hostname);
 
+            if (!ApproovService.IsSDKInitialized())
+            {
+                ApproovService.LogWarning(TAG + "ApproovCertificateHandler.ValidateCertificate: SDK is not initialized, denying connection for " + requestUrl);
+                return false;
+            }
+
             if (requestContext != null && !ApproovService.ShouldApplyPinning(requestContext))
             {
                 ApproovService.LogWarning(TAG + "ApproovCertificateHandler.ValidateCertificate: pinning skipped by mutator but certificate handler is still attached; denying connection for " + requestUrl);
