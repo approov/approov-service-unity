@@ -150,5 +150,20 @@ namespace Approov.Tests
             Assert.True(context.TryGetBodyBytes(out byte[] bodyBytes));
             Assert.That(bodyBytes, Is.Empty);
         }
+
+        [Test]
+        public void AddSubstitutionQueryParam_RejectsNullOrWhitespaceKey()
+        {
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.AddSubstitutionQueryParam(null));
+            Assert.Throws<System.ArgumentNullException>(() => ApproovService.AddSubstitutionQueryParam(" "));
+        }
+
+        [Test]
+        public void DecodeSubstitutionQueryParameterValue_UnescapesPercentEncodedKey()
+        {
+            string decoded = ApproovRequestProcessor.DecodeSubstitutionQueryParameterValue("tenant%2Fprod%20api%2Bkey");
+
+            Assert.That(decoded, Is.EqualTo("tenant/prod api+key"));
+        }
     }
 }

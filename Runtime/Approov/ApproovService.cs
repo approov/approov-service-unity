@@ -669,6 +669,11 @@ namespace Approov
             */
         public static void AddSubstitutionQueryParam(string key)
         {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                throw new ArgumentNullException(nameof(key));
+            }
+
             lock (SubstitutionQueryParamsLock)
             {
                 SubstitutionQueryParams.Add(key);

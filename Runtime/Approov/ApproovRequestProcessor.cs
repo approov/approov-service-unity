@@ -229,7 +229,7 @@ namespace Approov
 
                 updatedUrl = regex.Replace(updatedUrl, match =>
                 {
-                    string secureStringKey = match.Groups[2].Value;
+                    string secureStringKey = DecodeSubstitutionQueryParameterValue(match.Groups[2].Value);
                     ApproovTokenFetchResult secureStringResult = ApproovBridge.FetchSecureStringAndWait(secureStringKey, null);
                     if (!mutator.HandleQueryParamSubstitutionResult(request, secureStringResult, queryParameter))
                     {
@@ -257,6 +257,16 @@ namespace Approov
             {
                 changes.SubstitutionQueryParamKeys = updatedKeys ?? new List<string>();
             }
+        }
+
+        internal static string DecodeSubstitutionQueryParameterValue(string encodedValue)
+        {
+            if (encodedValue == null)
+            {
+                return string.Empty;
+            }
+
+            return Uri.UnescapeDataString(encodedValue);
         }
 
         private static Dictionary<string, string> CaptureUnityRequestHeaders(UnityWebRequest request)
