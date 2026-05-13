@@ -50,6 +50,18 @@ namespace Approov.Tests
             Assert.That(source, Does.Not.Contain("return \"{\\\"status\\\":10}\";"));
         }
 
+        [Test]
+        public void NativePinning_PreservesAuthorityForCertificateFetch()
+        {
+            string csharpSource = ReadPackageFile("Runtime/Approov/ApproovCertificateHandler.cs");
+            string androidSource = ReadPackageFile("Plugins/Android/ApproovUnity.androidlib/src/main/java/io/approov/unity/service/ApproovUnityBridge.java");
+            string iosSource = ReadPackageFile("Plugins/iOS/ApproovBridge-ObjectiveC.mm");
+
+            StringAssert.Contains("authority = uri.Authority;", csharpSource);
+            StringAssert.Contains("URI uri = new URI(\"https://\" + authority + \"/\");", androidSource);
+            StringAssert.Contains("NSString *urlString = [@\"https://\" stringByAppendingString:authority];", iosSource);
+        }
+
         private static string ReadPackageFile(string relativePath)
         {
             foreach (string root in CandidateRoots())

@@ -38,6 +38,16 @@ public final class ApproovUnityBridge {
     private static final HashMap<String, byte[]> approovCertCache = new HashMap<>(APPROOV_CERT_CACHE_SIZE);
     private static final ReadWriteLock certCacheLock = new ReentrantReadWriteLock();
 
+    private static final class Endpoint {
+        final String authority;
+        final String host;
+
+        Endpoint(String authority, String host) {
+            this.authority = authority;
+            this.host = host;
+        }
+    }
+
     private ApproovUnityBridge() {
     }
 
@@ -153,41 +163,46 @@ public final class ApproovUnityBridge {
         }
     }
 
-    public static String shouldProceedWithConnection(byte[] cert, String hostname, String pinType) {
-        String pinningString = getCertPinForPinType(cert, pinType);
-        if (pinningString == null) {
-            return TAG + "Unable to extract pin value from certificate for host " + hostname;
+    public static String shouldProceedWithConnection(byte[] cert, String authority, String pinType) {
+        Endpoint endpoint = parseEndpoint(authority);
+        if (endpoint == null) {
+            return TAG + "Unable to parse authority " + authority;
         }
 
-        if (checkPinForHostIsSetInApproov(hostname, pinningString, getPinsForHost(hostname, pinType))) {
+        String pinningString = getCertPinForPinType(cert, pinType);
+        if (pinningString == null) {
+            return TAG + "Unable to extract pin value from certificate for host " + endpoint.authority;
+        }
+
+        if (checkPinForHostIsSetInApproov(endpoint.host, pinningString, getPinsForHost(endpoint.host, pinType))) {
             return SUCCESS;
         }
 
-        byte[] cachedCert = getFromCache(hostname);
+        byte[] cachedCert = getFromCache(endpoint.authority);
         if (cachedCert != null) {
             if (Arrays.equals(cachedCert, cert)) {
                 return SUCCESS;
             }
 
-            removeFromCache(hostname);
+            removeFromCache(endpoint.authority);
         }
 
-        List<byte[]> hostCertificates = fetchHostCertificates(hostname);
+        List<byte[]> hostCertificates = fetchHostCertificates(endpoint.authority);
         if (hostCertificates == null) {
-            return TAG + "Unable to fetch certificates for host " + hostname;
+            return TAG + "Unable to fetch certificates for host " + endpoint.authority;
         }
 
         if (hostCertificates.size() < 2) {
-            return TAG + "Certificate chain too small for host " + hostname;
+            return TAG + "Certificate chain too small for host " + endpoint.authority;
         }
 
         if (!Arrays.equals(cert, hostCertificates.get(0))) {
-            return TAG + "Leaf certificate presented does not match the one fetched for host " + hostname;
+            return TAG + "Leaf certificate presented does not match the one fetched for host " + endpoint.authority;
         }
 
-        String resultMessage = approovPinsValidation(hostCertificates, hostname, pinType);
+        String resultMessage = approovPinsValidation(hostCertificates, endpoint.host, pinType);
         if (resultMessage == null) {
-            addToCache(hostname, hostCertificates.get(0));
+            addToCache(endpoint.authority, hostCertificates.get(0));
             return SUCCESS;
         }
 
@@ -227,9 +242,28 @@ public final class ApproovUnityBridge {
         return json.toString();
     }
 
-    private static List<byte[]> fetchHostCertificates(String hostname) {
+    private static Endpoint parseEndpoint(String authority) {
+        if (authority == null || authority.trim().isEmpty()) {
+            return null;
+        }
+
         try {
-            URI uri = new URI("https", hostname, null, null);
+            URI uri = new URI("https://" + authority.trim() + "/");
+            String host = uri.getHost();
+            String normalizedAuthority = uri.getAuthority();
+            if (host == null || normalizedAuthority == null) {
+                return null;
+            }
+
+            return new Endpoint(normalizedAuthority, host);
+        } catch (Exception exception) {
+            return null;
+        }
+    }
+
+    private static List<byte[]> fetchHostCertificates(String authority) {
+        try {
+            URI uri = new URI("https://" + authority + "/");
             URL url = uri.toURL();
             HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
             connection.setConnectTimeout(FETCH_CERTIFICATES_TIMEOUT_MS);

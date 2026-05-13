@@ -11,7 +11,7 @@ namespace Approov
     {
         private static readonly string TAG = "ApproovCertificateHandler ";
         private readonly string requestUrl;
-        private readonly string hostname;
+        private readonly string authority;
         private readonly ApproovRequestContext requestContext;
 
         public ApproovCertificateHandler(UnityWebRequest request)
@@ -23,17 +23,17 @@ namespace Approov
             if (!string.IsNullOrWhiteSpace(requestUrl) &&
                 Uri.TryCreate(requestUrl, UriKind.Absolute, out Uri uri))
             {
-                hostname = uri.Host;
+                authority = uri.Authority;
             }
             else
             {
-                hostname = string.Empty;
+                authority = string.Empty;
             }
         }
 
         protected override bool ValidateCertificate(byte[] certificateData)
         {
-            ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: validating certificate for " + hostname);
+            ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: validating certificate for " + authority);
 
             if (!ApproovService.IsSDKInitialized())
             {
@@ -47,14 +47,14 @@ namespace Approov
                 return false;
             }
 
-            if (string.IsNullOrWhiteSpace(hostname))
+            if (string.IsNullOrWhiteSpace(authority))
             {
-                ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: missing cached hostname, denying connection for " + requestUrl);
+                ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: missing cached authority, denying connection for " + requestUrl);
                 return false;
             }
 
             // Delegate the SPKI pin check to the native SDK. A null result means the connection is allowed.
-            string result = ApproovBridge.ShouldProceedWithNetworkConnection(certificateData, hostname, ApproovBridge.kPinTypePublicKeySha256);
+            string result = ApproovBridge.ShouldProceedWithNetworkConnection(certificateData, authority, ApproovBridge.kPinTypePublicKeySha256);
             if (result == null)
             {
                 ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: will ALLOW connection to " + requestUrl);

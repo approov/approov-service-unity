@@ -16,6 +16,7 @@ The format is based on Keep a Changelog and this package follows Semantic Versio
 - fallback integer token-status mapping now preserves `NOT_INITIALIZED` instead of shifting later statuses.
 - `ApproovService.Prefetch()` no longer fetches a hard-coded domain and background prefetch failures are logged instead of being left as unobserved task exceptions.
 - UnityWebRequest mutator hooks now run on the coroutine path while native fetches stay off-thread, and custom mutators can request additional Unity headers to capture.
+- certificate pin validation now preserves the request authority so non-default HTTPS ports validate against the correct endpoint.
 
 ## [1.0.0] - 2026-04-16
 
