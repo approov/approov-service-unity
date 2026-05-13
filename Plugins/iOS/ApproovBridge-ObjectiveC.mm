@@ -373,11 +373,8 @@ extern "C" {
 }
 
 void Approov_setUserProperty(const char *property) {
-    if (property == NULL) {
-        return;
-    }
-    // Call the setUserProperty method
-    [Approov setUserProperty:[NSString stringWithUTF8String:property]];
+    NSString *propertyString = property == NULL ? nil : [NSString stringWithUTF8String:property];
+    [Approov setUserProperty:propertyString];
 }
 
 extern "C" {
@@ -385,24 +382,18 @@ extern "C" {
 }
 
 void Approov_setDevKey(const char *key) {
-    if (key == NULL) {
-        return;
-    }
-    // Call the setDevKey method
-    [Approov setDevKey:[NSString stringWithUTF8String:key]];
+    NSString *keyString = key == NULL ? nil : [NSString stringWithUTF8String:key];
+    [Approov setDevKey:keyString];
 }
 
 
 extern "C" {
-    void Approov_setDataHashInToken(char* data);
+    void Approov_setDataHashInToken(const char* data);
 }
 
-void Approov_setDataHashInToken(char* data) {
-    if (data == NULL) {
-        return;
-    }
-    // Call the setDataHashInToken method
-    [Approov setDataHashInToken:[NSString stringWithUTF8String:data]];
+void Approov_setDataHashInToken(const char* data) {
+    NSString *dataString = data == NULL ? nil : [NSString stringWithUTF8String:data];
+    [Approov setDataHashInToken:dataString];
 }
 
 // NOTE in objectiveC: typedef unsigned char Byte;

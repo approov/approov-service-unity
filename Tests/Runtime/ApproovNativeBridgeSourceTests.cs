@@ -20,6 +20,25 @@ namespace Approov.Tests
             Assert.That(createIndex, Is.GreaterThan(lockIndex));
         }
 
+        [Test]
+        public void IosNullableStateMethods_ForwardNilToSdk()
+        {
+            string source = ReadPackageFile("Plugins/iOS/ApproovBridge-ObjectiveC.mm");
+
+            StringAssert.Contains(
+                "NSString *propertyString = property == NULL ? nil : [NSString stringWithUTF8String:property];",
+                source);
+            StringAssert.Contains("[Approov setUserProperty:propertyString];", source);
+            StringAssert.Contains(
+                "NSString *keyString = key == NULL ? nil : [NSString stringWithUTF8String:key];",
+                source);
+            StringAssert.Contains("[Approov setDevKey:keyString];", source);
+            StringAssert.Contains(
+                "NSString *dataString = data == NULL ? nil : [NSString stringWithUTF8String:data];",
+                source);
+            StringAssert.Contains("[Approov setDataHashInToken:dataString];", source);
+        }
+
         private static string ReadPackageFile(string relativePath)
         {
             foreach (string root in CandidateRoots())
