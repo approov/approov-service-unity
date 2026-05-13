@@ -32,6 +32,14 @@ namespace Approov.Tests
             }
         }
 
+        private sealed class ThrowingSigner : ApproovDefaultMessageSigning
+        {
+            protected override bool TryGetSignatureBytes(SigningMode mode, string message, out string signatureLabel, out byte[] signatureBytes)
+            {
+                throw new InvalidOperationException("signature unavailable");
+            }
+        }
+
         [Test]
         public void HandleProcessedRequest_AddsInstallSignatureHeaders()
         {
@@ -223,6 +231,24 @@ namespace Approov.Tests
             request.Headers.TryAddWithoutValidation("Approov-Token", "token-value");
 
             UnavailableSigner signer = new UnavailableSigner();
+            signer.SetDefaultFactory(ApproovDefaultMessageSigning.GenerateDefaultSignatureParametersFactory());
+
+            signer.HandleProcessedRequest(ApproovRequestContext.Create(request), new ApproovRequestMutations
+            {
+                TokenHeaderKey = "Approov-Token"
+            });
+
+            Assert.False(request.Headers.Contains("Signature"));
+            Assert.False(request.Headers.Contains("Signature-Input"));
+        }
+
+        [Test]
+        public void HandleProcessedRequest_SkipsSigningWhenSignatureCreationThrows()
+        {
+            HttpRequestMessage request = new(HttpMethod.Get, "https://api.example.com/v1/test");
+            request.Headers.TryAddWithoutValidation("Approov-Token", "token-value");
+
+            ThrowingSigner signer = new ThrowingSigner();
             signer.SetDefaultFactory(ApproovDefaultMessageSigning.GenerateDefaultSignatureParametersFactory());
 
             signer.HandleProcessedRequest(ApproovRequestContext.Create(request), new ApproovRequestMutations

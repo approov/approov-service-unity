@@ -402,9 +402,19 @@ namespace Approov
             }
 
             string signatureBase = BuildSignatureBase(request, plan);
-            if (!TryGetSignatureBytes(plan.Mode, signatureBase, out string signatureLabel, out byte[] signatureBytes))
+            string signatureLabel;
+            byte[] signatureBytes;
+            try
             {
-                ApproovService.LogTrace("ApproovDefaultMessageSigning: no signature bytes available for " + request.Uri);
+                if (!TryGetSignatureBytes(plan.Mode, signatureBase, out signatureLabel, out signatureBytes))
+                {
+                    ApproovService.LogTrace("ApproovDefaultMessageSigning: no signature bytes available for " + request.Uri);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                ApproovService.LogTrace("ApproovDefaultMessageSigning: skipping request signature because " + ex.Message);
                 return;
             }
 
