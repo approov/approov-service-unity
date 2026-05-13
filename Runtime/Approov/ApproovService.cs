@@ -578,20 +578,16 @@ namespace Approov
             {
                 if (urlRegex != null)
                 {
-                    try {
-                        Regex reg = new Regex(urlRegex);
-                        foreach (Regex existing in ExclusionURLRegexs)
+                    Regex reg = new Regex(urlRegex);
+                    foreach (Regex existing in ExclusionURLRegexs)
+                    {
+                        if (existing.ToString() == urlRegex)
                         {
-                            if (existing.ToString() == urlRegex)
-                            {
-                                return;
-                            }
+                            return;
                         }
-                        ExclusionURLRegexs.Add(reg);
-                        LogTrace(TAG + "AddExclusionURLRegex " + urlRegex);
-                    } catch (ArgumentException e) {
-                        LogWarning(TAG + "AddExclusionURLRegex: " + e.Message);
                     }
+                    ExclusionURLRegexs.Add(reg);
+                    LogTrace(TAG + "AddExclusionURLRegex " + urlRegex);
                 }
             }
         }
@@ -607,24 +603,21 @@ namespace Approov
             {
                 if (urlRegex != null)
                 {
-                    try {
-                        Regex regexToRemove = null;
-                        foreach (Regex existing in ExclusionURLRegexs)
+                    _ = new Regex(urlRegex);
+                    Regex regexToRemove = null;
+                    foreach (Regex existing in ExclusionURLRegexs)
+                    {
+                        if (existing.ToString() == urlRegex)
                         {
-                            if (existing.ToString() == urlRegex)
-                            {
-                                regexToRemove = existing;
-                                break;
-                            }
+                            regexToRemove = existing;
+                            break;
                         }
-                        if (regexToRemove != null)
-                        {
-                            ExclusionURLRegexs.Remove(regexToRemove);
-                        }
-                        LogTrace(TAG + "RemoveExclusionURLRegex " + urlRegex);
-                    } catch (ArgumentException e) {
-                        LogWarning(TAG + "RemoveExclusionURLRegex: " + e.Message);
                     }
+                    if (regexToRemove != null)
+                    {
+                        ExclusionURLRegexs.Remove(regexToRemove);
+                    }
+                    LogTrace(TAG + "RemoveExclusionURLRegex " + urlRegex);
                 }
             }
         }

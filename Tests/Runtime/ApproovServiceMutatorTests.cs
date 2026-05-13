@@ -165,5 +165,12 @@ namespace Approov.Tests
 
             Assert.That(decoded, Is.EqualTo("tenant/prod api+key"));
         }
+
+        [Test]
+        public void ExclusionURLRegex_ThrowsForMalformedRegex()
+        {
+            Assert.Throws<System.ArgumentException>(() => ApproovService.AddExclusionURLRegex("["));
+            Assert.Throws<System.ArgumentException>(() => ApproovService.RemoveExclusionURLRegex("["));
+        }
     }
 }
