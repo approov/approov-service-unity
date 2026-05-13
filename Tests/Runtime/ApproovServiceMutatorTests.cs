@@ -82,6 +82,38 @@ namespace Approov.Tests
         }
 
         [Test]
+        public void HandleInterceptorFetchTokenResult_ThrowsRejectionExceptionForRejected()
+        {
+            ApproovRequestContext context = ApproovRequestContext.Create(new HttpRequestMessage(HttpMethod.Get, "https://api.example.com"));
+
+            RejectionException exception = Assert.Throws<RejectionException>(() =>
+                ApproovServiceMutator.Default.HandleInterceptorFetchTokenResult(context, new ApproovTokenFetchResult
+                {
+                    status = ApproovTokenFetchStatus.Rejected,
+                    ARC = "arc",
+                    rejectionReasons = "reasons"
+                }));
+
+            Assert.That(exception.ARC, Is.EqualTo("arc"));
+            Assert.That(exception.RejectionReasons, Is.EqualTo("reasons"));
+        }
+
+        [Test]
+        public void HandleFetchTokenResult_ThrowsRejectionExceptionForRejected()
+        {
+            RejectionException exception = Assert.Throws<RejectionException>(() =>
+                ApproovServiceMutator.Default.HandleFetchTokenResult(new ApproovTokenFetchResult
+                {
+                    status = ApproovTokenFetchStatus.Rejected,
+                    ARC = "arc",
+                    rejectionReasons = "reasons"
+                }));
+
+            Assert.That(exception.ARC, Is.EqualTo("arc"));
+            Assert.That(exception.RejectionReasons, Is.EqualTo("reasons"));
+        }
+
+        [Test]
         public void ShouldProcessRequest_RespectsExclusionRegex()
         {
             const string regex = "https://skip\\.example\\.com/.*";

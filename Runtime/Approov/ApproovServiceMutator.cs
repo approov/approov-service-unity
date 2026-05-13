@@ -56,6 +56,8 @@ namespace Approov
                 case ApproovTokenFetchStatus.PoorNetwork:
                 case ApproovTokenFetchStatus.MITMDetected:
                     throw new NetworkingErrorException("FetchToken: networking error, retry needed");
+                case ApproovTokenFetchStatus.Rejected:
+                    throw new RejectionException("FetchToken rejected", approovResult.ARC, approovResult.rejectionReasons);
                 default:
                     throw new PermanentException("FetchToken: " + ApproovService.ApproovTokenFetchStatusToString(approovResult.status));
             }
@@ -152,6 +154,11 @@ namespace Approov
                 case ApproovTokenFetchStatus.UnknownURL:
                 case ApproovTokenFetchStatus.UnprotectedURL:
                     return false;
+                case ApproovTokenFetchStatus.Rejected:
+                    throw new RejectionException(
+                        "Approov token fetch rejected for " + request.Uri,
+                        approovResult.ARC,
+                        approovResult.rejectionReasons);
                 default:
                     throw new PermanentException(
                         "Approov token fetch for " + request.Uri + ": " + ApproovService.ApproovTokenFetchStatusToString(approovResult.status));
