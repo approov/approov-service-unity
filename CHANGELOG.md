@@ -8,6 +8,7 @@ The format is based on Keep a Changelog and this package follows Semantic Versio
 
 ### Fixed
 
+- the package now declares its UnityWebRequest built-in module dependency so fresh projects compile the runtime assembly without manually enabling the module.
 - `ApproovService.SendWebRequest(...)` now runs token fetch and request mutation work through a coroutine-backed background task before dispatch.
 - `ApproovWebRequest` has been removed so integrations use the safer service-owned send path.
 - certificate validation now fails closed if an Approov certificate handler is invoked before SDK initialization.

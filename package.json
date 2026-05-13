@@ -7,7 +7,9 @@
   "documentationUrl": "https://github.com/approov/approov-service-unity#readme",
   "changelogUrl": "https://github.com/approov/approov-service-unity/blob/main/CHANGELOG.md",
   "licensesUrl": "https://github.com/approov/approov-service-unity/blob/main/LICENSE.md",
-  "dependencies": {},
+  "dependencies": {
+    "com.unity.modules.unitywebrequest": "1.0.0"
+  },
   "keywords": [
     "approov",
     "unity",
