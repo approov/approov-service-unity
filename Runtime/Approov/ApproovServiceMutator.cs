@@ -234,7 +234,20 @@ namespace Approov
             return true;
         }
 
-        internal virtual void AddUnityRequestHeadersToCapture(ISet<string> headers)
+        /// <summary>
+        /// Adds UnityWebRequest header names that must be captured before request processing moves
+        /// onto a background thread. UnityWebRequest does not expose full header enumeration.
+        /// </summary>
+        public virtual void AddUnityRequestHeadersToCapture(ISet<string> headers)
+        {
+        }
+
+        /// <summary>
+        /// Adds UnityWebRequest header names after the initial capture pass has populated a request
+        /// snapshot. Override this when the header names to capture are themselves listed in another
+        /// request header.
+        /// </summary>
+        public virtual void AddUnityRequestHeadersToCapture(ISet<string> headers, ApproovRequestContext request)
         {
         }
     }

@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using UnityEngine.Networking;
@@ -24,7 +25,13 @@ namespace Approov
                 throw new ArgumentNullException(nameof(request));
             }
 
-            Dictionary<string, string> capturedHeaders = CaptureUnityRequestHeaders(request);
+            if (!ApproovService.IsSDKInitialized())
+            {
+                throw new InitializationFailureException("ApproovService Error: SDK not initialized");
+            }
+
+            ApproovServiceMutator mutator = ApproovService.GetServiceMutator();
+            Dictionary<string, string> capturedHeaders = CaptureUnityRequestHeaders(request, mutator);
             Dictionary<string, string> headersToSet = new(StringComparer.OrdinalIgnoreCase);
             Uri updatedUri = null;
             ApproovRequestContext backgroundContext = ApproovRequestContext.CreateMutableSnapshot(
@@ -33,21 +40,49 @@ namespace Approov
                 (header, value) => headersToSet[header] = value,
                 uri => updatedUri = uri);
 
-            Task task = Task.Run(() => Apply(backgroundContext));
-            while (!task.IsCompleted)
+            if (!mutator.ShouldProcessRequest(backgroundContext))
+            {
+                ApproovService.LogTrace("ApproovRequestProcessor request skipped by mutator");
+                yield break;
+            }
+
+            string requestUrl = backgroundContext.Uri?.AbsoluteUri;
+            ApproovService.LogTrace("ApproovRequestProcessor Apply start url=" + requestUrl);
+
+            Task<ApproovTokenFetchResult> tokenFetchTask = Task.Run(() =>
+            {
+                lock (NativeRequestLock)
+                {
+                    return FetchTokenWithNativeState(backgroundContext, requestUrl);
+                }
+            });
+
+            while (!tokenFetchTask.IsCompleted)
             {
                 yield return null;
             }
 
-            if (task.IsFaulted)
+            ApproovTokenFetchResult approovResult = GetCompletedTaskResult(tokenFetchTask);
+            ApproovService.LogTrace(
+                "ApproovRequestProcessor FetchToken result url=" + requestUrl + " | " +
+                ApproovService.DescribeFetchResult(approovResult));
+            if (!mutator.HandleInterceptorFetchTokenResult(backgroundContext, approovResult))
             {
-                throw task.Exception.InnerException ?? task.Exception;
+                ApproovService.LogTrace("ApproovRequestProcessor mutator allowed request to proceed without Approov changes");
+                yield break;
             }
 
-            if (task.IsCanceled)
-            {
-                throw new TaskCanceledException(task);
-            }
+            ApproovRequestMutations changes = new();
+            ApplyTokenAndTraceHeaders(backgroundContext, approovResult, changes);
+            yield return ApplyHeaderSubstitutionsAsync(backgroundContext, mutator, changes);
+            yield return ApplyQuerySubstitutionsAsync(backgroundContext, mutator, changes);
+
+            ApproovService.LogTrace(
+                "ApproovRequestProcessor invoking mutator " + mutator +
+                " with tokenHeader=" + (changes.TokenHeaderKey ?? "none") +
+                " traceHeader=" + (changes.TraceIDHeaderKey ?? "none"));
+            mutator.HandleProcessedRequest(backgroundContext, changes);
+            ApproovService.LogTrace("ApproovRequestProcessor Apply complete");
 
             foreach (KeyValuePair<string, string> header in headersToSet)
             {
@@ -98,6 +133,31 @@ namespace Approov
 
         private static void ApplyWithNativeState(ApproovRequestContext request, ApproovServiceMutator mutator, string requestUrl)
         {
+            ApproovTokenFetchResult approovResult = FetchTokenWithNativeState(request, requestUrl);
+            ApproovService.LogTrace(
+                "ApproovRequestProcessor FetchToken result url=" + requestUrl + " | " +
+                ApproovService.DescribeFetchResult(approovResult));
+            if (!mutator.HandleInterceptorFetchTokenResult(request, approovResult))
+            {
+                ApproovService.LogTrace("ApproovRequestProcessor mutator allowed request to proceed without Approov changes");
+                return;
+            }
+
+            ApproovRequestMutations changes = new();
+            ApplyTokenAndTraceHeaders(request, approovResult, changes);
+            ApplyHeaderSubstitutions(request, mutator, changes);
+            ApplyQuerySubstitutions(request, mutator, changes);
+
+            ApproovService.LogTrace(
+                "ApproovRequestProcessor invoking mutator " + mutator +
+                " with tokenHeader=" + (changes.TokenHeaderKey ?? "none") +
+                " traceHeader=" + (changes.TraceIDHeaderKey ?? "none"));
+            mutator.HandleProcessedRequest(request, changes);
+            ApproovService.LogTrace("ApproovRequestProcessor Apply complete");
+        }
+
+        private static ApproovTokenFetchResult FetchTokenWithNativeState(ApproovRequestContext request, string requestUrl)
+        {
             string bindingHeader = ApproovService.GetBindingHeader();
             if (!string.IsNullOrWhiteSpace(bindingHeader))
             {
@@ -126,26 +186,7 @@ namespace Approov
                 throw new NetworkingErrorException("ApproovRequestProcessor Forced pin update required", true);
             }
 
-            ApproovService.LogTrace(
-                "ApproovRequestProcessor FetchToken result url=" + requestUrl + " | " +
-                ApproovService.DescribeFetchResult(approovResult));
-            if (!mutator.HandleInterceptorFetchTokenResult(request, approovResult))
-            {
-                ApproovService.LogTrace("ApproovRequestProcessor mutator allowed request to proceed without Approov changes");
-                return;
-            }
-
-            ApproovRequestMutations changes = new();
-            ApplyTokenAndTraceHeaders(request, approovResult, changes);
-            ApplyHeaderSubstitutions(request, mutator, changes);
-            ApplyQuerySubstitutions(request, mutator, changes);
-
-            ApproovService.LogTrace(
-                "ApproovRequestProcessor invoking mutator " + mutator +
-                " with tokenHeader=" + (changes.TokenHeaderKey ?? "none") +
-                " traceHeader=" + (changes.TraceIDHeaderKey ?? "none"));
-            mutator.HandleProcessedRequest(request, changes);
-            ApproovService.LogTrace("ApproovRequestProcessor Apply complete");
+            return approovResult;
         }
 
         private static void ApplyTokenAndTraceHeaders(ApproovRequestContext request, ApproovTokenFetchResult approovResult, ApproovRequestMutations changes)
@@ -212,6 +253,58 @@ namespace Approov
             changes.SubstitutionHeaderKeys = updatedHeaders ?? new List<string>();
         }
 
+        private static IEnumerator ApplyHeaderSubstitutionsAsync(ApproovRequestContext request, ApproovServiceMutator mutator, ApproovRequestMutations changes)
+        {
+            Dictionary<string, string> substitutionHeaders = ApproovService.GetSubstitutionHeaders();
+            List<string> updatedHeaders = null;
+            foreach (System.Collections.Generic.KeyValuePair<string, string> substitutionHeader in substitutionHeaders)
+            {
+                string headerValue = request.GetHeader(substitutionHeader.Key);
+                if (headerValue == null)
+                {
+                    continue;
+                }
+
+                string prefix = substitutionHeader.Value ?? string.Empty;
+                if (!headerValue.StartsWith(prefix, StringComparison.Ordinal) || headerValue.Length <= prefix.Length)
+                {
+                    continue;
+                }
+
+                string secureStringKey = headerValue.Substring(prefix.Length);
+                Task<ApproovTokenFetchResult> secureStringTask = Task.Run(() =>
+                {
+                    lock (NativeRequestLock)
+                    {
+                        return ApproovBridge.FetchSecureStringAndWait(secureStringKey, null);
+                    }
+                });
+
+                while (!secureStringTask.IsCompleted)
+                {
+                    yield return null;
+                }
+
+                ApproovTokenFetchResult secureStringResult = GetCompletedTaskResult(secureStringTask);
+                if (!mutator.HandleHeaderSubstitutionResult(request, secureStringResult, substitutionHeader.Key))
+                {
+                    continue;
+                }
+
+                if (secureStringResult.secureString == null)
+                {
+                    throw new ApproovException("ApproovRequestProcessor Header substitution returned null secure string");
+                }
+
+                request.SetHeader(substitutionHeader.Key, prefix + secureStringResult.secureString);
+                updatedHeaders ??= new List<string>();
+                updatedHeaders.Add(substitutionHeader.Key);
+                ApproovService.LogTrace("ApproovRequestProcessor substituted header " + substitutionHeader.Key);
+            }
+
+            changes.SubstitutionHeaderKeys = updatedHeaders ?? new List<string>();
+        }
+
         private static void ApplyQuerySubstitutions(ApproovRequestContext request, ApproovServiceMutator mutator, ApproovRequestMutations changes)
         {
             string originalUrl = request.Uri?.AbsoluteUri ?? string.Empty;
@@ -259,6 +352,74 @@ namespace Approov
             }
         }
 
+        private static IEnumerator ApplyQuerySubstitutionsAsync(ApproovRequestContext request, ApproovServiceMutator mutator, ApproovRequestMutations changes)
+        {
+            string originalUrl = request.Uri?.AbsoluteUri ?? string.Empty;
+            string updatedUrl = originalUrl;
+            List<string> updatedKeys = null;
+
+            foreach (string queryParameter in ApproovService.GetSubstitutionQueryParams())
+            {
+                Regex regex = new("([?&]" + Regex.Escape(queryParameter) + "=)([^&#]*)", RegexOptions.ECMAScript);
+                MatchCollection matches = regex.Matches(updatedUrl);
+                if (matches.Count == 0)
+                {
+                    continue;
+                }
+
+                StringBuilder builder = new();
+                int lastIndex = 0;
+                foreach (Match match in matches)
+                {
+                    builder.Append(updatedUrl, lastIndex, match.Index - lastIndex);
+                    string replacement = match.Value;
+                    string secureStringKey = DecodeSubstitutionQueryParameterValue(match.Groups[2].Value);
+                    Task<ApproovTokenFetchResult> secureStringTask = Task.Run(() =>
+                    {
+                        lock (NativeRequestLock)
+                        {
+                            return ApproovBridge.FetchSecureStringAndWait(secureStringKey, null);
+                        }
+                    });
+
+                    while (!secureStringTask.IsCompleted)
+                    {
+                        yield return null;
+                    }
+
+                    ApproovTokenFetchResult secureStringResult = GetCompletedTaskResult(secureStringTask);
+                    if (mutator.HandleQueryParamSubstitutionResult(request, secureStringResult, queryParameter))
+                    {
+                        if (secureStringResult.secureString == null)
+                        {
+                            throw new ApproovException("ApproovRequestProcessor Query substitution returned null secure string");
+                        }
+
+                        updatedKeys ??= new List<string>();
+                        updatedKeys.Add(queryParameter);
+                        ApproovService.LogTrace("ApproovRequestProcessor substituted query parameter " + queryParameter);
+                        replacement = match.Groups[1].Value + Uri.EscapeDataString(secureStringResult.secureString);
+                    }
+
+                    builder.Append(replacement);
+                    lastIndex = match.Index + match.Length;
+                }
+
+                builder.Append(updatedUrl, lastIndex, updatedUrl.Length - lastIndex);
+                updatedUrl = builder.ToString();
+            }
+
+            if (!string.Equals(originalUrl, updatedUrl, StringComparison.Ordinal))
+            {
+                request.Uri = new Uri(updatedUrl);
+                changes.SetSubstitutionQueryParamResults(originalUrl, updatedKeys ?? new List<string>());
+            }
+            else
+            {
+                changes.SubstitutionQueryParamKeys = updatedKeys ?? new List<string>();
+            }
+        }
+
         internal static string DecodeSubstitutionQueryParameterValue(string encodedValue)
         {
             if (encodedValue == null)
@@ -269,7 +430,22 @@ namespace Approov
             return Uri.UnescapeDataString(encodedValue);
         }
 
-        private static Dictionary<string, string> CaptureUnityRequestHeaders(UnityWebRequest request)
+        private static T GetCompletedTaskResult<T>(Task<T> task)
+        {
+            if (task.IsFaulted)
+            {
+                throw task.Exception.InnerException ?? task.Exception;
+            }
+
+            if (task.IsCanceled)
+            {
+                throw new TaskCanceledException(task);
+            }
+
+            return task.Result;
+        }
+
+        private static Dictionary<string, string> CaptureUnityRequestHeaders(UnityWebRequest request, ApproovServiceMutator mutator)
         {
             HashSet<string> headerNames = new(StringComparer.OrdinalIgnoreCase)
             {
@@ -293,15 +469,32 @@ namespace Approov
                 headerNames.Add(substitutionHeader.Key);
             }
 
-            ApproovService.GetServiceMutator().AddUnityRequestHeadersToCapture(headerNames);
+            mutator.AddUnityRequestHeadersToCapture(headerNames);
 
             Dictionary<string, string> headers = new(StringComparer.OrdinalIgnoreCase);
+            CaptureUnityHeaders(request, headers, headerNames);
+            for (int i = 0; i < 4; i++)
+            {
+                int headerNameCount = headerNames.Count;
+                ApproovRequestContext capturedContext = ApproovRequestContext.CreateMutableSnapshot(request, headers, null, null);
+                mutator.AddUnityRequestHeadersToCapture(headerNames, capturedContext);
+                if (headerNames.Count == headerNameCount)
+                {
+                    break;
+                }
+
+                CaptureUnityHeaders(request, headers, headerNames);
+            }
+
+            return headers;
+        }
+
+        private static void CaptureUnityHeaders(UnityWebRequest request, Dictionary<string, string> headers, HashSet<string> headerNames)
+        {
             foreach (string header in headerNames)
             {
                 CaptureUnityHeader(request, headers, header);
             }
-
-            return headers;
         }
 
         private static void CaptureUnityHeader(UnityWebRequest request, Dictionary<string, string> headers, string header)

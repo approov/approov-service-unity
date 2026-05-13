@@ -147,6 +147,25 @@ public class MessageSigningHarnessApp : MonoBehaviour
             return ApproovServiceMutator.Default.ShouldProcessPinning(request);
         }
 
+        public override void AddUnityRequestHeadersToCapture(ISet<string> headers)
+        {
+            headers?.Add(RandomHeadersListHeader);
+        }
+
+        public override void AddUnityRequestHeadersToCapture(ISet<string> headers, ApproovRequestContext request)
+        {
+            if (headers == null)
+            {
+                return;
+            }
+
+            string[] dynamicHeaderNames = _owner.GetDynamicSignedHeaders(request);
+            for (int index = 0; index < dynamicHeaderNames.Length; index++)
+            {
+                headers.Add(dynamicHeaderNames[index]);
+            }
+        }
+
         public override void HandleProcessedRequest(ApproovRequestContext request, ApproovRequestMutations changes)
         {
             if (_owner == null || request?.Uri == null || changes == null)

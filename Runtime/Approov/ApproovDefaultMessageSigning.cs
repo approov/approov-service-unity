@@ -371,7 +371,7 @@ namespace Approov
             return "ApproovDefaultMessageSigning";
         }
 
-        internal override void AddUnityRequestHeadersToCapture(ISet<string> headers)
+        public override void AddUnityRequestHeadersToCapture(ISet<string> headers)
         {
             DefaultFactory?.AddUnityRequestHeadersToCapture(headers);
             foreach (SignatureParametersFactory factory in _hostFactories.Values)

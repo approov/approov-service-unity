@@ -164,6 +164,12 @@ public class ShapesApp : MonoBehaviour
             return ApproovServiceMutator.Default.ShouldProcessPinning(request);
         }
 
+        public override void AddUnityRequestHeadersToCapture(ISet<string> headers)
+        {
+            _installSigner.AddUnityRequestHeadersToCapture(headers);
+            _accountSigner.AddUnityRequestHeadersToCapture(headers);
+        }
+
         public override void HandleProcessedRequest(ApproovRequestContext request, ApproovRequestMutations changes)
         {
             if (_owner == null || request?.Uri == null || changes == null)

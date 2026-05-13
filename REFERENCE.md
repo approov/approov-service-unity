@@ -203,6 +203,8 @@ Members:
 - `HandleQueryParamSubstitutionResult(ApproovRequestContext request, ApproovTokenFetchResult approovResult, string queryKey)`
 - `HandleProcessedRequest(ApproovRequestContext request, ApproovRequestMutations changes)`
 - `ShouldProcessPinning(ApproovRequestContext request)`
+- `AddUnityRequestHeadersToCapture(ISet<string> headers)`
+- `AddUnityRequestHeadersToCapture(ISet<string> headers, ApproovRequestContext request)`
 
 The default mutator:
 
