@@ -13,7 +13,7 @@ namespace Approov
         /// </summary>
         public static IEnumerator SendApproovWebRequest(this UnityWebRequest request)
         {
-            return ApproovService.SendWebRequestCoroutine(request);
+            return ApproovService.SendWebRequest(request);
         }
     }
 }

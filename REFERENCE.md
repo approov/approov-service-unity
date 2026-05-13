@@ -5,7 +5,6 @@ This document describes the supported public API for the Unity package itself. I
 The primary integration types are:
 
 - `ApproovService`
-- `ApproovWebRequest`
 - `ApproovHttpClientHandler`
 - `ApproovServiceMutator`
 - `ApproovRequestContext`
@@ -51,17 +50,17 @@ Recommended usage:
 
 ```csharp
 UnityWebRequest request = UnityWebRequest.Get("https://example.com");
-yield return request.SendApproovWebRequest();
+yield return ApproovService.SendWebRequest(request);
 ```
 
 Members:
 
-- `SendApproovWebRequest(this UnityEngine.Networking.UnityWebRequest request)`
-  Coroutine-friendly extension that applies token injection, secure-string substitution, optional trace header mutation, and Approov certificate validation before dispatching the request without blocking the Unity main thread during native token fetches.
 - `SendWebRequest(UnityEngine.Networking.UnityWebRequest request)`
-  Legacy compatibility path that applies the same request protection before dispatching the request and returns Unity's `UnityWebRequestAsyncOperation`.
+  Coroutine-friendly API that applies token injection, secure-string substitution, optional trace header mutation, and Approov certificate validation before dispatching the request without blocking the Unity main thread during native token fetches.
+- `SendApproovWebRequest(this UnityEngine.Networking.UnityWebRequest request)`
+  Thin extension-method alias for `ApproovService.SendWebRequest(...)`.
 
-`request.SendApproovWebRequest()` is the preferred UnityWebRequest path. `ApproovWebRequest` remains available for compatibility, but Unity method hiding can bypass Approov processing if the request is later handled through a plain `UnityWebRequest` reference.
+`ApproovService.SendWebRequest(...)` is the preferred UnityWebRequest path because the service-owned API cannot be bypassed by Unity method hiding.
 
 ### HttpClient Integration
 
@@ -159,21 +158,6 @@ Exclusion rules should be used carefully. Excluding protected URLs can prevent n
 
 The `message` string is signed exactly as provided. Do not pre-hash it, normalize whitespace implicitly, or assume canonicalization by the package.
 
-## ApproovWebRequest
-
-`ApproovWebRequest` is a compatibility wrapper over `UnityWebRequest` that attaches `ApproovCertificateHandler` and forwards `SendWebRequest()` into `ApproovService.SendWebRequest(...)`.
-
-Supported members include:
-
-- constructors matching the common `UnityWebRequest` construction forms
-- `SendWebRequest()`
-- helper factories such as `Get(...)`, `Post(...)`, `Put(...)`, `Delete(...)`, `Head(...)`, and `PostWwwForm(...)`
-
-Preferred guidance:
-
-- use `request.SendApproovWebRequest()` for new integrations
-- use `ApproovWebRequest` only when the compatibility wrapper is specifically useful in existing code
-
 ## ApproovHttpClientHandler
 
 `ApproovHttpClientHandler` is the `HttpClient` transport adapter for the package.
@@ -191,7 +175,7 @@ Behavior:
 
 ## ApproovCertificateHandler
 
-`ApproovCertificateHandler` is the Unity TLS callback used by `ApproovService.SendWebRequest(...)` and `ApproovWebRequest`.
+`ApproovCertificateHandler` is the Unity TLS callback used by `ApproovService.SendWebRequest(...)`.
 
 Guidance:
 

@@ -220,30 +220,16 @@ namespace Approov
             return new ApproovHttpClientHandler(innerHandler);
         }
 
-        /**
-        * Applies Approov protection to a UnityWebRequest and sends it. This avoids the common pitfall
-        * where a request created as ApproovWebRequest is stored in a UnityWebRequest variable and the
-        * hidden SendWebRequest method is bypassed.
-        */
-        public static UnityWebRequestAsyncOperation SendWebRequest(UnityWebRequest request)
-        {
-            PrepareUnityWebRequest(request, "SendWebRequest");
-            LogTrace(TAG + "SendWebRequest applying Approov processing to " + request.url);
-            ApproovRequestProcessor.ApplyToUnityWebRequest(request);
-            ApplyUnityWebRequestPinning(request, "SendWebRequest");
-            return request.SendWebRequest();
-        }
-
         /// <summary>
         /// Applies Approov protection to a UnityWebRequest without blocking the Unity main thread
         /// while the native SDK fetches tokens or secure-string substitutions.
         /// </summary>
-        public static System.Collections.IEnumerator SendWebRequestCoroutine(UnityWebRequest request)
+        public static System.Collections.IEnumerator SendWebRequest(UnityWebRequest request)
         {
-            PrepareUnityWebRequest(request, "SendWebRequestCoroutine");
-            LogTrace(TAG + "SendWebRequestCoroutine applying Approov processing to " + request.url);
+            PrepareUnityWebRequest(request, "SendWebRequest");
+            LogTrace(TAG + "SendWebRequest applying Approov processing to " + request.url);
             yield return ApproovRequestProcessor.ApplyToUnityWebRequestAsync(request);
-            ApplyUnityWebRequestPinning(request, "SendWebRequestCoroutine");
+            ApplyUnityWebRequestPinning(request, "SendWebRequest");
             yield return request.SendWebRequest();
         }
 

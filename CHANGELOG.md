@@ -8,7 +8,7 @@ The format is based on Keep a Changelog and this package follows Semantic Versio
 
 ### Fixed
 
-- `UnityWebRequest.SendApproovWebRequest()` now runs token fetch and request mutation work through a coroutine-backed background task before dispatch.
+- `ApproovService.SendWebRequest(...)` now runs token fetch and request mutation work through a coroutine-backed background task before dispatch.
 - `ApproovWebRequest` has been removed so integrations use the safer service-owned send path.
 - certificate validation now fails closed if an Approov certificate handler is invoked before SDK initialization.
 - native request mutation is serialized while using SDK-global token-binding state.

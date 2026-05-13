@@ -56,12 +56,10 @@ using Approov;
 using UnityEngine.Networking;
 
 UnityWebRequest request = UnityWebRequest.Get("https://approov.io");
-yield return request.SendApproovWebRequest();
+yield return ApproovService.SendWebRequest(request);
 ```
 
-Use `request.SendApproovWebRequest()` as the primary UnityWebRequest integration surface. It applies request mutation, token injection, secure-string substitution, and Approov certificate validation before dispatch without blocking the Unity main thread during native token fetches.
-
-`ApproovService.SendWebRequest(...)` and `ApproovWebRequest` remain available for compatibility, but they should not be the primary documented path because legacy immediate-send APIs run Approov preprocessing before returning Unity's request operation.
+Use `ApproovService.SendWebRequest(...)` as the primary UnityWebRequest integration surface. It applies request mutation, token injection, secure-string substitution, and Approov certificate validation before dispatch without blocking the Unity main thread during native token fetches.
 
 ## Use With HttpClient
 
@@ -130,7 +128,6 @@ string installSignature = ApproovService.GetInstallMessageSignature(message);
 ## Supported Surface
 
 - `ApproovService`
-- `ApproovWebRequest`
 - `ApproovHttpClientHandler`
 - `ApproovServiceMutator`
 - `ApproovRequestContext`

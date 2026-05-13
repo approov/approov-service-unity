@@ -689,7 +689,7 @@ public class MessageSigningHarnessApp : MonoBehaviour
         {
             if (IsApproovEnabled())
             {
-                approovSendRoutine = request.SendApproovWebRequest();
+                approovSendRoutine = ApproovService.SendWebRequest(request);
             }
             else
             {
