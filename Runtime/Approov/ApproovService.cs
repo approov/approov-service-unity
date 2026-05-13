@@ -842,6 +842,26 @@ namespace Approov
             return FetchApproovTokenWithNativeState(url, bindingValue, true);
         }
 
+        internal static ApproovTokenFetchResult FetchSecureStringWithNativeState(string key, string newDef, string operation)
+        {
+            lock (NativeStateLock)
+            {
+                ApproovTokenFetchResult fetchResult = ApproovBridge.FetchSecureStringAndWait(key, newDef);
+                HandleTokenFetchSideEffects(fetchResult, operation);
+                return fetchResult;
+            }
+        }
+
+        internal static ApproovTokenFetchResult FetchCustomJWTWithNativeState(string payload, string operation)
+        {
+            lock (NativeStateLock)
+            {
+                ApproovTokenFetchResult fetchResult = ApproovBridge.FetchCustomJWTAndWait(payload);
+                HandleTokenFetchSideEffects(fetchResult, operation);
+                return fetchResult;
+            }
+        }
+
         private static ApproovTokenFetchResult FetchApproovTokenWithNativeState(string url, string bindingValue, bool restoreExplicitDataHash)
         {
             lock (NativeStateLock)
@@ -998,7 +1018,7 @@ namespace Approov
             }
             LogTrace(TAG + "FetchSecureString start type=" + type + " key=" + key);
 
-            ApproovTokenFetchResult fetchResult = ExecuteWithNativeState(() => ApproovBridge.FetchSecureStringAndWait(key, newDef));
+            ApproovTokenFetchResult fetchResult = FetchSecureStringWithNativeState(key, newDef, "FetchSecureString " + type + " for " + key);
             LogTrace(TAG + "FetchSecureString: " + type + " " + ApproovTokenFetchStatusToString(fetchResult.status));
             GetServiceMutator().HandleFetchSecureStringResult(fetchResult, type, key);
             return fetchResult.secureString;
@@ -1018,11 +1038,14 @@ namespace Approov
             EnsureSDKInitialized("FetchCustomJWT");
             LogTrace(TAG + "FetchCustomJWT start payloadLength=" + (payload?.Length ?? 0));
             ApproovTokenFetchResult fetchResult;
-            ApproovTokenFetchStatus aCurrentFetchStatus = ApproovTokenFetchStatus.NoApproovService  ;
-            try {
-            fetchResult = ExecuteWithNativeState(() => ApproovBridge.FetchCustomJWTAndWait(payload));
-            aCurrentFetchStatus = fetchResult.status;
-            } catch (Exception e) {
+            ApproovTokenFetchStatus aCurrentFetchStatus = ApproovTokenFetchStatus.NoApproovService;
+            try
+            {
+                fetchResult = FetchCustomJWTWithNativeState(payload, "FetchCustomJWT");
+                aCurrentFetchStatus = fetchResult.status;
+            }
+            catch (Exception e)
+            {
                 LogWarning(TAG + "FetchCustomJWT: " + e.Message);
                 throw new PermanentException(TAG + "FetchCustomJWT: " + e.Message);
             }
@@ -1043,7 +1066,7 @@ namespace Approov
             EnsureSDKInitialized("Precheck");
             LogTrace(TAG + "Precheck start");
             
-            ApproovTokenFetchResult fetchResult = ExecuteWithNativeState(() => ApproovBridge.FetchSecureStringAndWait("precheck-dummy-key", null));
+            ApproovTokenFetchResult fetchResult = FetchSecureStringWithNativeState("precheck-dummy-key", null, "Precheck");
             GetServiceMutator().HandlePrecheckResult(fetchResult);
             // Get loggable token and print
             string loggableToken = fetchResult.loggableToken;

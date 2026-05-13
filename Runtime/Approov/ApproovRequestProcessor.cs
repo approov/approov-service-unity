@@ -210,7 +210,7 @@ namespace Approov
 
                 string secureStringKey = headerValue.Substring(prefix.Length);
                 ApproovTokenFetchResult secureStringResult =
-                    ApproovService.ExecuteWithNativeState(() => ApproovBridge.FetchSecureStringAndWait(secureStringKey, null));
+                    ApproovService.FetchSecureStringWithNativeState(secureStringKey, null, "Header substitution for " + substitutionHeader.Key);
                 if (!mutator.HandleHeaderSubstitutionResult(request, secureStringResult, substitutionHeader.Key))
                 {
                     continue;
@@ -251,7 +251,7 @@ namespace Approov
                 string secureStringKey = headerValue.Substring(prefix.Length);
                 Task<ApproovTokenFetchResult> secureStringTask = Task.Run(() =>
                 {
-                    return ApproovService.ExecuteWithNativeState(() => ApproovBridge.FetchSecureStringAndWait(secureStringKey, null));
+                    return ApproovService.FetchSecureStringWithNativeState(secureStringKey, null, "Header substitution for " + substitutionHeader.Key);
                 });
 
                 while (!secureStringTask.IsCompleted)
@@ -298,7 +298,7 @@ namespace Approov
                 {
                     string secureStringKey = DecodeSubstitutionQueryParameterValue(match.Groups[2].Value);
                     ApproovTokenFetchResult secureStringResult =
-                        ApproovService.ExecuteWithNativeState(() => ApproovBridge.FetchSecureStringAndWait(secureStringKey, null));
+                        ApproovService.FetchSecureStringWithNativeState(secureStringKey, null, "Query substitution for " + queryParameter);
                     if (!mutator.HandleQueryParamSubstitutionResult(request, secureStringResult, queryParameter))
                     {
                         return match.Value;
@@ -351,7 +351,7 @@ namespace Approov
                     string secureStringKey = DecodeSubstitutionQueryParameterValue(match.Groups[2].Value);
                     Task<ApproovTokenFetchResult> secureStringTask = Task.Run(() =>
                     {
-                        return ApproovService.ExecuteWithNativeState(() => ApproovBridge.FetchSecureStringAndWait(secureStringKey, null));
+                        return ApproovService.FetchSecureStringWithNativeState(secureStringKey, null, "Query substitution for " + queryParameter);
                     });
 
                     while (!secureStringTask.IsCompleted)
