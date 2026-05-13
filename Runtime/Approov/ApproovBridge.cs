@@ -400,11 +400,11 @@ namespace Approov
         {
             get
             {
+                AndroidJNI.AttachCurrentThread();
                 lock (BridgeClassLock)
                 {
                     if (sBridgeClass == null)
                     {
-                        AndroidJNI.AttachCurrentThread();
                         sBridgeClass = new AndroidJavaClass(AndroidBridgeClassName);
                     }
 
