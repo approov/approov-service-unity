@@ -766,23 +766,49 @@ namespace Approov
         }
         #endif
         /*
-        *  Allows token prefetch operation to be performed as early as possible. This
-        *  permits a token to be available while an application might be loading resources
-        *  or is awaiting user input. Since the initial token fetch is the most
-        *  expensive the prefetch seems reasonable.
+        *  Allows SDK configuration prefetch to run as early as possible. Use the URL
+        *  overload when the app can identify the protected API domain it wants to warm.
         */
         public static void Prefetch() {
-            lock (InitializerLock) {
-                if (ApproovSDKInitialized) {
-                    LogTrace(TAG + "Prefetch requested");
-                    _ = HandleTokenFetchAsync();
-                } 
+            if (!IsSDKInitialized())
+            {
+                return;
             }
+
+            LogTrace(TAG + "Prefetch requested for SDK configuration");
+            _ = HandlePrefetchAsync(FetchConfig, "SDK configuration");
         }
 
-        private static async Task HandleTokenFetchAsync()
+        /// <summary>
+        /// Performs an early background token fetch for the supplied protected URL.
+        /// </summary>
+        public static void Prefetch(string url)
         {
-            _ = await Task.Run(() => FetchToken("approov.io"));
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                throw new ArgumentNullException(nameof(url));
+            }
+
+            if (!IsSDKInitialized())
+            {
+                return;
+            }
+
+            LogTrace(TAG + "Prefetch requested for " + url);
+            _ = HandlePrefetchAsync(() => FetchToken(url), url);
+        }
+
+        private static async Task HandlePrefetchAsync(Func<string> prefetchOperation, string description)
+        {
+            try
+            {
+                _ = await Task.Run(prefetchOperation).ConfigureAwait(false);
+                LogTrace(TAG + "Prefetch completed for " + description);
+            }
+            catch (Exception exception)
+            {
+                LogWarning(TAG + "Prefetch failed for " + description + ": " + exception.Message);
+            }
         }
 
         private static void EnsureSDKInitialized(string operation)

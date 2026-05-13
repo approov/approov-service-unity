@@ -36,7 +36,9 @@ The package runtime only initializes the native SDK on Android and iOS player bu
 - `IsSDKInitialized()`
   Returns whether the native SDK has been initialized in the current session.
 - `Prefetch()`
-  Starts an early background token fetch to warm the Approov state before the first protected request.
+  Starts an early background SDK configuration fetch to warm the Approov state before the first protected request.
+- `Prefetch(string url)`
+  Starts an early background token fetch for a specific protected URL.
 
 Initialization rules:
 
