@@ -199,6 +199,18 @@ namespace Approov.Tests
         }
 
         [Test]
+        public void HandleTokenFetchSideEffects_ThrowsRetryableNetworkingErrorForForcedPins()
+        {
+            NetworkingErrorException exception = Assert.Throws<NetworkingErrorException>(() =>
+                ApproovService.HandleTokenFetchSideEffects(new ApproovTokenFetchResult
+                {
+                    isForceApplyPins = true
+                }, "test fetch"));
+
+            Assert.True(exception.ShouldRetry);
+        }
+
+        [Test]
         public void ExclusionURLRegex_ThrowsForMalformedRegex()
         {
             Assert.Throws<System.ArgumentException>(() => ApproovService.AddExclusionURLRegex("["));

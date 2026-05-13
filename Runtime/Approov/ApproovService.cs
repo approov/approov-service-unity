@@ -81,6 +81,9 @@ namespace Approov
         /* Service mutator used to customize request and fetch handling */
         private static ApproovServiceMutator ServiceMutator = ApproovServiceMutator.Default;
         private static readonly object ServiceMutatorLock = new();
+        /* Native SDK state that affects subsequent fetches, such as token binding, is process-wide. */
+        private static readonly object NativeStateLock = new();
+        private static string DataHashInToken = null;
 
 
         /*  
@@ -811,6 +814,71 @@ namespace Approov
             }
         }
 
+        internal static T ExecuteWithNativeState<T>(Func<T> operation)
+        {
+            lock (NativeStateLock)
+            {
+                return operation();
+            }
+        }
+
+        internal static void ExecuteWithNativeState(Action operation)
+        {
+            lock (NativeStateLock)
+            {
+                operation();
+            }
+        }
+
+        internal static ApproovTokenFetchResult FetchApproovTokenWithNativeState(string url)
+        {
+            return FetchApproovTokenWithNativeState(url, null, false);
+        }
+
+        internal static ApproovTokenFetchResult FetchApproovTokenWithNativeState(string url, string bindingValue)
+        {
+            return FetchApproovTokenWithNativeState(url, bindingValue, true);
+        }
+
+        private static ApproovTokenFetchResult FetchApproovTokenWithNativeState(string url, string bindingValue, bool restoreExplicitDataHash)
+        {
+            lock (NativeStateLock)
+            {
+                string explicitDataHash = DataHashInToken;
+                ApproovBridge.SetDataHashInToken(restoreExplicitDataHash ? bindingValue : explicitDataHash);
+                try
+                {
+                    ApproovTokenFetchResult fetchResult = ApproovBridge.FetchApproovTokenAndWait(url);
+                    HandleTokenFetchSideEffects(fetchResult, "Approov token fetch for " + url);
+                    return fetchResult;
+                }
+                finally
+                {
+                    if (restoreExplicitDataHash)
+                    {
+                        ApproovBridge.SetDataHashInToken(explicitDataHash);
+                    }
+                }
+            }
+        }
+
+        internal static void HandleTokenFetchSideEffects(ApproovTokenFetchResult fetchResult, string operation)
+        {
+            if (fetchResult.isConfigChanged)
+            {
+                // A token fetch can also deliver refreshed dynamic pinning state. Clear the transport-side
+                // certificate cache and mark the SDK config as consumed so later fetches see a clean state.
+                LogTrace(TAG + operation + " SDK configuration changed, refreshing pin state");
+                ApproovBridge.ClearCertificateCache();
+                FetchConfig();
+            }
+
+            if (fetchResult.isForceApplyPins)
+            {
+                throw new NetworkingErrorException(TAG + operation + ": forced pin update required", true);
+            }
+        }
+
         private static void EnsureSDKInitialized(string operation)
         {
             if (!IsSDKInitialized())
@@ -928,7 +996,7 @@ namespace Approov
             }
             LogTrace(TAG + "FetchSecureString start type=" + type + " key=" + key);
 
-            ApproovTokenFetchResult fetchResult = ApproovBridge.FetchSecureStringAndWait(key, newDef);
+            ApproovTokenFetchResult fetchResult = ExecuteWithNativeState(() => ApproovBridge.FetchSecureStringAndWait(key, newDef));
             LogTrace(TAG + "FetchSecureString: " + type + " " + ApproovTokenFetchStatusToString(fetchResult.status));
             GetServiceMutator().HandleFetchSecureStringResult(fetchResult, type, key);
             return fetchResult.secureString;
@@ -950,7 +1018,7 @@ namespace Approov
             ApproovTokenFetchResult fetchResult;
             ApproovTokenFetchStatus aCurrentFetchStatus = ApproovTokenFetchStatus.NoApproovService  ;
             try {
-            fetchResult = ApproovBridge.FetchCustomJWTAndWait(payload);
+            fetchResult = ExecuteWithNativeState(() => ApproovBridge.FetchCustomJWTAndWait(payload));
             aCurrentFetchStatus = fetchResult.status;
             } catch (Exception e) {
                 LogWarning(TAG + "FetchCustomJWT: " + e.Message);
@@ -973,7 +1041,7 @@ namespace Approov
             EnsureSDKInitialized("Precheck");
             LogTrace(TAG + "Precheck start");
             
-            ApproovTokenFetchResult fetchResult = ApproovBridge.FetchSecureStringAndWait("precheck-dummy-key", null);
+            ApproovTokenFetchResult fetchResult = ExecuteWithNativeState(() => ApproovBridge.FetchSecureStringAndWait("precheck-dummy-key", null));
             GetServiceMutator().HandlePrecheckResult(fetchResult);
             // Get loggable token and print
             string loggableToken = fetchResult.loggableToken;
@@ -1010,7 +1078,11 @@ namespace Approov
         {
             LogTrace(TAG + "SetDataHashInToken valueLength=" + (data?.Length ?? 0));
             LogTrace(TAG + "SetDataHashInToken");
-            ApproovBridge.SetDataHashInToken(data);
+            lock (NativeStateLock)
+            {
+                DataHashInToken = data;
+                ApproovBridge.SetDataHashInToken(data);
+            }
         }
 
         /**
@@ -1081,7 +1153,7 @@ namespace Approov
             EnsureSDKInitialized("FetchToken");
             LogTrace(TAG + "FetchToken start url=" + url);
             // Invoke fetchApproovTokenAndWait
-            ApproovTokenFetchResult fetchResult = ApproovBridge.FetchApproovTokenAndWait(url);
+            ApproovTokenFetchResult fetchResult = FetchApproovTokenWithNativeState(url);
             ApproovTokenFetchStatus aCurrentFetchStatus = fetchResult.status;
 
             // Process the result
@@ -1125,7 +1197,7 @@ namespace Approov
         {
             EnsureSDKInitialized("FetchConfig");
             LogTrace(TAG + "FetchConfig start");
-            string config = ApproovBridge.FetchConfig();
+            string config = ExecuteWithNativeState(ApproovBridge.FetchConfig);
             return config;
         }
         /**

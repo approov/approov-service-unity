@@ -11,8 +11,6 @@ namespace Approov
 {
     internal static class ApproovRequestProcessor
     {
-        private static readonly object NativeRequestLock = new();
-
         public static void ApplyToUnityWebRequest(UnityWebRequest request)
         {
             Apply(ApproovRequestContext.Create(request));
@@ -51,10 +49,7 @@ namespace Approov
 
             Task<ApproovTokenFetchResult> tokenFetchTask = Task.Run(() =>
             {
-                lock (NativeRequestLock)
-                {
-                    return FetchTokenWithNativeState(backgroundContext, requestUrl);
-                }
+                return FetchTokenWithNativeState(backgroundContext, requestUrl);
             });
 
             while (!tokenFetchTask.IsCompleted)
@@ -122,13 +117,9 @@ namespace Approov
             string requestUrl = request.Uri?.AbsoluteUri;
             ApproovService.LogTrace("ApproovRequestProcessor Apply start url=" + requestUrl);
 
-            // The native SDK keeps token-binding input as process-wide state. Serialize the
-            // full native request mutation pass so concurrent requests cannot bind or substitute
-            // values with another request's SDK state.
-            lock (NativeRequestLock)
-            {
-                ApplyWithNativeState(request, mutator, requestUrl);
-            }
+            // The native SDK keeps token-binding input as process-wide state. Keep the HttpClient
+            // synchronous path serialized across native mutation and mutator callbacks.
+            ApproovService.ExecuteWithNativeState(() => ApplyWithNativeState(request, mutator, requestUrl));
         }
 
         private static void ApplyWithNativeState(ApproovRequestContext request, ApproovServiceMutator mutator, string requestUrl)
@@ -167,26 +158,11 @@ namespace Approov
                     throw new ConfigurationFailureException("ApproovRequestProcessor Missing token binding header: " + bindingHeader);
                 }
 
-                ApproovService.SetDataHashInToken(bindingValue);
                 ApproovService.LogTrace("ApproovRequestProcessor bound token to header " + bindingHeader);
+                return ApproovService.FetchApproovTokenWithNativeState(requestUrl, bindingValue);
             }
 
-            ApproovTokenFetchResult approovResult = ApproovBridge.FetchApproovTokenAndWait(requestUrl);
-            if (approovResult.isConfigChanged)
-            {
-                // A token fetch can also deliver refreshed dynamic pinning state. Clear the transport-side
-                // certificate cache and mark the SDK config as consumed so later fetches see a clean state.
-                ApproovService.LogTrace("ApproovRequestProcessor SDK configuration changed, refreshing pin state");
-                ApproovBridge.ClearCertificateCache();
-                ApproovService.FetchConfig();
-            }
-
-            if (approovResult.isForceApplyPins)
-            {
-                throw new NetworkingErrorException("ApproovRequestProcessor Forced pin update required", true);
-            }
-
-            return approovResult;
+            return ApproovService.FetchApproovTokenWithNativeState(requestUrl);
         }
 
         private static void ApplyTokenAndTraceHeaders(ApproovRequestContext request, ApproovTokenFetchResult approovResult, ApproovRequestMutations changes)
@@ -233,7 +209,8 @@ namespace Approov
                 }
 
                 string secureStringKey = headerValue.Substring(prefix.Length);
-                ApproovTokenFetchResult secureStringResult = ApproovBridge.FetchSecureStringAndWait(secureStringKey, null);
+                ApproovTokenFetchResult secureStringResult =
+                    ApproovService.ExecuteWithNativeState(() => ApproovBridge.FetchSecureStringAndWait(secureStringKey, null));
                 if (!mutator.HandleHeaderSubstitutionResult(request, secureStringResult, substitutionHeader.Key))
                 {
                     continue;
@@ -274,10 +251,7 @@ namespace Approov
                 string secureStringKey = headerValue.Substring(prefix.Length);
                 Task<ApproovTokenFetchResult> secureStringTask = Task.Run(() =>
                 {
-                    lock (NativeRequestLock)
-                    {
-                        return ApproovBridge.FetchSecureStringAndWait(secureStringKey, null);
-                    }
+                    return ApproovService.ExecuteWithNativeState(() => ApproovBridge.FetchSecureStringAndWait(secureStringKey, null));
                 });
 
                 while (!secureStringTask.IsCompleted)
@@ -323,7 +297,8 @@ namespace Approov
                 updatedUrl = regex.Replace(updatedUrl, match =>
                 {
                     string secureStringKey = DecodeSubstitutionQueryParameterValue(match.Groups[2].Value);
-                    ApproovTokenFetchResult secureStringResult = ApproovBridge.FetchSecureStringAndWait(secureStringKey, null);
+                    ApproovTokenFetchResult secureStringResult =
+                        ApproovService.ExecuteWithNativeState(() => ApproovBridge.FetchSecureStringAndWait(secureStringKey, null));
                     if (!mutator.HandleQueryParamSubstitutionResult(request, secureStringResult, queryParameter))
                     {
                         return match.Value;
@@ -376,10 +351,7 @@ namespace Approov
                     string secureStringKey = DecodeSubstitutionQueryParameterValue(match.Groups[2].Value);
                     Task<ApproovTokenFetchResult> secureStringTask = Task.Run(() =>
                     {
-                        lock (NativeRequestLock)
-                        {
-                            return ApproovBridge.FetchSecureStringAndWait(secureStringKey, null);
-                        }
+                        return ApproovService.ExecuteWithNativeState(() => ApproovBridge.FetchSecureStringAndWait(secureStringKey, null));
                     });
 
                     while (!secureStringTask.IsCompleted)
