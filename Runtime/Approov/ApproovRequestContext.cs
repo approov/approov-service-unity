@@ -144,7 +144,7 @@ namespace Approov
                 bytes = _getBodyBytes.Invoke();
             }
 
-            if (bytes == null || bytes.Length == 0)
+            if (bytes == null)
             {
                 bodyBytes = null;
                 return false;

@@ -86,6 +86,38 @@ namespace Approov.Tests
         }
 
         [Test]
+        public void HandleProcessedRequest_AddsRequiredContentDigestForEmptyBody()
+        {
+            HttpRequestMessage request = new(HttpMethod.Post, "https://api.example.com/v1/test");
+            request.Headers.TryAddWithoutValidation("Approov-Token", "token-value");
+            request.Content = new ByteArrayContent(Array.Empty<byte>());
+
+            StubSigner signer = new StubSigner();
+            ApproovDefaultMessageSigning.SignatureParametersFactory factory = new ApproovDefaultMessageSigning.SignatureParametersFactory()
+                .SetBaseParameters(new ApproovDefaultMessageSigning.SignatureParameters()
+                    .AddComponentIdentifier("@method")
+                    .AddComponentIdentifier("@target-uri"))
+                .SetUseInstallMessageSigning()
+                .SetAddApproovTokenHeader(true)
+                .SetBodyDigestConfig(ApproovDefaultMessageSigning.DIGEST_SHA256, true);
+            signer.SetDefaultFactory(factory);
+
+            ApproovRequestContext context = ApproovRequestContext.Create(request);
+
+            signer.HandleProcessedRequest(context, new ApproovRequestMutations
+            {
+                TokenHeaderKey = "Approov-Token"
+            });
+
+            string contentDigest = context.GetHeader("Content-Digest");
+            string signatureInput = request.Headers.GetValues("Signature-Input").Single();
+
+            Assert.That(contentDigest, Is.EqualTo("sha-256=:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=:"));
+            StringAssert.Contains("\"content-digest\"", signatureInput);
+            StringAssert.Contains("\"content-digest\": sha-256=:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=:", signer.LastMessage);
+        }
+
+        [Test]
         public void HandleProcessedRequest_CanIncludeOptionalApiKeyHeader()
         {
             HttpRequestMessage request = new(HttpMethod.Get, "https://api.example.com/v5/shapes/");

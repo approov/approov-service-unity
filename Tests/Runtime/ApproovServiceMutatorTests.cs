@@ -136,5 +136,19 @@ namespace Approov.Tests
             Assert.That(context.Uri.AbsoluteUri, Is.EqualTo("https://api.example.com/"));
             Assert.False(context.TryGetBodyBytes(out _));
         }
+
+        [Test]
+        public void TryGetBodyBytes_ReturnsTrueForEmptyBody()
+        {
+            HttpRequestMessage request = new(HttpMethod.Post, "https://api.example.com")
+            {
+                Content = new ByteArrayContent(System.Array.Empty<byte>())
+            };
+
+            ApproovRequestContext context = ApproovRequestContext.Create(request);
+
+            Assert.True(context.TryGetBodyBytes(out byte[] bodyBytes));
+            Assert.That(bodyBytes, Is.Empty);
+        }
     }
 }
