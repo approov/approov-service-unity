@@ -10,12 +10,16 @@ using UnityEngine;
 
 namespace Approov.EditorTools
 {
+    /// <summary>
+    /// Editor workflow that fetches the native Approov iOS XCFramework into the Unity project.
+    /// </summary>
     internal static class ApproovIosSdkInstaller
     {
         private const string RepoOwner = "approov";
         private const string RepoName = "approov-ios-sdk";
         private const string TargetPath = "Assets/Plugins/iOS/Approov.xcframework";
         private const string InstallerTempRoot = "Temp/ApproovInstaller";
+        private static bool sPromptQueued;
 
         [Serializable]
         private sealed class GitHubAsset
@@ -52,7 +56,7 @@ namespace Approov.EditorTools
         [InitializeOnLoadMethod]
         private static void RegisterPrompt()
         {
-            EditorApplication.delayCall += PromptForMissingIosSdk;
+            QueueMissingIosSdkPrompt();
         }
 
         public static string InstalledVersion => ApproovInstallerState.instance.InstalledIosVersion;
@@ -169,7 +173,7 @@ namespace Approov.EditorTools
         private static HttpClient CreateClient()
         {
             HttpClient client = new HttpClient();
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("Approov-Unity-Package/0.1.0");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Approov-Unity-Package/1.0.0");
             client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
             return client;
         }
@@ -195,6 +199,7 @@ namespace Approov.EditorTools
                 FileUtil.DeleteFileOrDirectory(TargetPath + ".meta");
             }
 
+            // Install into Assets/Plugins/iOS so Unity includes the XCFramework in Xcode exports.
             Directory.CreateDirectory(Path.GetDirectoryName(TargetPath) ?? "Assets/Plugins/iOS");
             FileUtil.CopyFileOrDirectory(extractedFramework, TargetPath);
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
@@ -216,11 +221,42 @@ namespace Approov.EditorTools
                     continue;
                 }
 
+                // Scope the imported XCFramework strictly to iOS players. The package does not need it
+                // in the editor or on unrelated Unity build targets.
                 importer.SetCompatibleWithAnyPlatform(false);
                 importer.SetCompatibleWithEditor(false);
                 importer.SetCompatibleWithPlatform(BuildTarget.iOS, true);
                 importer.SaveAndReimport();
             }
+        }
+
+        private static void QueueMissingIosSdkPrompt()
+        {
+            if (sPromptQueued)
+            {
+                return;
+            }
+
+            sPromptQueued = true;
+            EditorApplication.delayCall += TryPromptForMissingIosSdk;
+        }
+
+        private static void TryPromptForMissingIosSdk()
+        {
+            sPromptQueued = false;
+
+            if (Application.isBatchMode)
+            {
+                return;
+            }
+
+            if (BuildPipeline.isBuildingPlayer || EditorApplication.isCompiling || EditorApplication.isUpdating)
+            {
+                QueueMissingIosSdkPrompt();
+                return;
+            }
+
+            PromptForMissingIosSdk();
         }
 
         private static void PromptForMissingIosSdk()

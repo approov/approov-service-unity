@@ -4,32 +4,64 @@ using UnityEngine.Networking;
 
 namespace Approov
 {
+    /// <summary>
+    /// Unity TLS callback that delegates certificate pin validation to the Approov native SDK.
+    /// </summary>
     public class ApproovCertificateHandler : CertificateHandler
     {
         private static readonly string TAG = "ApproovCertificateHandler ";
-        private UnityWebRequest approovWebRequest = null;
+        private readonly string requestUrl;
+        private readonly string authority;
+        private readonly ApproovRequestContext requestContext;
 
         public ApproovCertificateHandler(UnityWebRequest request)
         {
-            this.approovWebRequest = request;
+            // Certificate validation runs off the main thread, so cache any UnityWebRequest state here.
+            requestContext = request == null ? null : ApproovRequestContext.CreateSnapshot(request);
+            requestUrl = requestContext?.Uri?.AbsoluteUri ?? string.Empty;
+
+            if (requestContext?.Uri != null)
+            {
+                authority = requestContext.Uri.Authority;
+            }
+            else
+            {
+                authority = string.Empty;
+            }
         }
 
         protected override bool ValidateCertificate(byte[] certificateData)
         {
-            // Extract the hostname from the URL
-            Uri uri = new Uri(approovWebRequest.url);
-            string hostname = uri.Host;
-            ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: validating certificate for " + hostname);
-            // Call bridging layer versions
-            string result = ApproovBridge.ShouldProceedWithNetworkConnection(certificateData, hostname, ApproovBridge.kPinTypePublicKeySha256);
-            // The bridging layer processes the return result from the native layer and returns null if the connection should be allowed
+            ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: validating certificate for " + authority);
+
+            if (!ApproovService.IsSDKInitialized())
+            {
+                ApproovService.LogWarning(TAG + "ApproovCertificateHandler.ValidateCertificate: SDK is not initialized, denying connection for " + requestUrl);
+                return false;
+            }
+
+            if (requestContext != null && !ApproovService.ShouldApplyPinning(requestContext))
+            {
+                ApproovService.LogWarning(TAG + "ApproovCertificateHandler.ValidateCertificate: pinning skipped by mutator but certificate handler is still attached; denying connection for " + requestUrl);
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(authority))
+            {
+                ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: missing cached authority, denying connection for " + requestUrl);
+                return false;
+            }
+
+            // Delegate the SPKI pin check to the native SDK. A null result means the connection is allowed.
+            string result = ApproovBridge.ShouldProceedWithNetworkConnection(certificateData, authority, ApproovBridge.kPinTypePublicKeySha256);
             if (result == null)
             {
-                ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: will ALLOW connection to " + approovWebRequest.url);
+                ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: will ALLOW connection to " + requestUrl);
                 return true;
             }
-            // Pr returns an eeror message if the connection should be denied
-            ApproovService.LogTrace(TAG + "ApproovCertificateHandler.ValidateCertificate: will DENY connection to " + approovWebRequest.url + " with error: " + result);
+
+            // Non-null means the native layer produced a reason for denying the connection.
+            ApproovService.LogWarning(TAG + "ApproovCertificateHandler.ValidateCertificate: will DENY connection to " + requestUrl + " with error: " + result);
             return false;
         }
     }

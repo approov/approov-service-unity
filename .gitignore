@@ -2,3 +2,5 @@
 Temp/
 Library/
 obj/
+log file.txt
+.gitignore

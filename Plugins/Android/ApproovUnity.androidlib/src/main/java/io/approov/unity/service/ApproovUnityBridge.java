@@ -1,11 +1,11 @@
 package io.approov.unity.service;
 
 import android.app.Activity;
+import android.app.Application;
 import android.content.Context;
 import android.util.Base64;
 
 import com.criticalblue.approovsdk.Approov;
-import com.unity3d.player.UnityPlayer;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -33,16 +33,29 @@ public final class ApproovUnityBridge {
     private static final String TAG = "ApproovUnityBridge: ";
     private static final int FETCH_CERTIFICATES_TIMEOUT_MS = 3000;
     private static final String SUCCESS = "SUCCESS";
+    private static final String INTERNAL_ERROR_RESULT_JSON = "{\"status\":11,\"statusString\":\"INTERNAL_ERROR\"}";
     private static final int APPROOV_CERT_CACHE_SIZE = 10;
     private static final HashMap<String, byte[]> approovCertCache = new HashMap<>(APPROOV_CERT_CACHE_SIZE);
     private static final ReadWriteLock certCacheLock = new ReentrantReadWriteLock();
+
+    private static final class Endpoint {
+        final String authority;
+        final String host;
+
+        Endpoint(String authority, String host) {
+            this.authority = authority;
+            this.host = host;
+        }
+    }
 
     private ApproovUnityBridge() {
     }
 
     public static void initialize(String config) {
-        Activity activity = UnityPlayer.currentActivity;
-        Context applicationContext = activity.getApplicationContext();
+        Context applicationContext = getApplicationContext();
+        if (applicationContext == null) {
+            throw new IllegalStateException("Unable to resolve an Android application context for Approov initialization");
+        }
         Approov.initialize(applicationContext, config, "auto", null);
     }
 
@@ -74,6 +87,41 @@ public final class ApproovUnityBridge {
         Approov.setActivity(activity);
     }
 
+    private static Context getApplicationContext() {
+        Activity activity = getCurrentUnityActivity();
+        if (activity != null) {
+            return activity.getApplicationContext();
+        }
+
+        try {
+            // Avoid a hard compile-time dependency on UnityPlayer so the Android library can compile
+            // cleanly in generated Gradle projects where that class is not on this module classpath.
+            Class<?> activityThreadClass = Class.forName("android.app.ActivityThread");
+            Object application = activityThreadClass.getMethod("currentApplication").invoke(null);
+            if (application instanceof Application) {
+                return ((Application) application).getApplicationContext();
+            }
+        } catch (Exception ignored) {
+            // Fall through and return null below.
+        }
+
+        return null;
+    }
+
+    private static Activity getCurrentUnityActivity() {
+        try {
+            Class<?> unityPlayerClass = Class.forName("com.unity3d.player.UnityPlayer");
+            Object currentActivity = unityPlayerClass.getField("currentActivity").get(null);
+            if (currentActivity instanceof Activity) {
+                return (Activity) currentActivity;
+            }
+        } catch (Exception ignored) {
+            // Fall through and return null below.
+        }
+
+        return null;
+    }
+
     public static void setDevKey(String key) {
         Approov.setDevKey(key);
     }
@@ -95,7 +143,15 @@ public final class ApproovUnityBridge {
     }
 
     public static String getMessageSignature(String message) {
-        return Approov.getMessageSignature(message);
+        return getAccountMessageSignature(message);
+    }
+
+    public static String getAccountMessageSignature(String message) {
+        return Approov.getAccountMessageSignature(message);
+    }
+
+    public static String getInstallMessageSignature(String message) {
+        return Approov.getInstallMessageSignature(message);
     }
 
     public static void clearCertificateCache() {
@@ -107,41 +163,46 @@ public final class ApproovUnityBridge {
         }
     }
 
-    public static String shouldProceedWithConnection(byte[] cert, String hostname, String pinType) {
-        String pinningString = getCertPinForPinType(cert, pinType);
-        if (pinningString == null) {
-            return TAG + "Unable to extract pin value from certificate for host " + hostname;
+    public static String shouldProceedWithConnection(byte[] cert, String authority, String pinType) {
+        Endpoint endpoint = parseEndpoint(authority);
+        if (endpoint == null) {
+            return TAG + "Unable to parse authority " + authority;
         }
 
-        if (checkPinForHostIsSetInApproov(hostname, pinningString, getPinsForHost(hostname, pinType))) {
+        String pinningString = getCertPinForPinType(cert, pinType);
+        if (pinningString == null) {
+            return TAG + "Unable to extract pin value from certificate for host " + endpoint.authority;
+        }
+
+        if (checkPinForHostIsSetInApproov(endpoint.host, pinningString, getPinsForHost(endpoint.host, pinType))) {
             return SUCCESS;
         }
 
-        byte[] cachedCert = getFromCache(hostname);
+        byte[] cachedCert = getFromCache(endpoint.authority);
         if (cachedCert != null) {
             if (Arrays.equals(cachedCert, cert)) {
                 return SUCCESS;
             }
 
-            removeFromCache(hostname);
+            removeFromCache(endpoint.authority);
         }
 
-        List<byte[]> hostCertificates = fetchHostCertificates(hostname);
+        List<byte[]> hostCertificates = fetchHostCertificates(endpoint.authority);
         if (hostCertificates == null) {
-            return TAG + "Unable to fetch certificates for host " + hostname;
+            return TAG + "Unable to fetch certificates for host " + endpoint.authority;
         }
 
         if (hostCertificates.size() < 2) {
-            return TAG + "Certificate chain too small for host " + hostname;
+            return TAG + "Certificate chain too small for host " + endpoint.authority;
         }
 
         if (!Arrays.equals(cert, hostCertificates.get(0))) {
-            return TAG + "Leaf certificate presented does not match the one fetched for host " + hostname;
+            return TAG + "Leaf certificate presented does not match the one fetched for host " + endpoint.authority;
         }
 
-        String resultMessage = approovPinsValidation(hostCertificates, hostname, pinType);
+        String resultMessage = approovPinsValidation(hostCertificates, endpoint.host, pinType);
         if (resultMessage == null) {
-            addToCache(hostname, hostCertificates.get(0));
+            addToCache(endpoint.authority, hostCertificates.get(0));
             return SUCCESS;
         }
 
@@ -150,7 +211,7 @@ public final class ApproovUnityBridge {
 
     private static String tokenFetchResultToJson(Approov.TokenFetchResult result) {
         if (result == null) {
-            return "{\"status\":10}";
+            return INTERNAL_ERROR_RESULT_JSON;
         }
 
         JSONObject json = new JSONObject();
@@ -175,15 +236,34 @@ public final class ApproovUnityBridge {
                 json.put("measurementConfig", measurementArray);
             }
         } catch (JSONException exception) {
-            return "{\"status\":10}";
+            return INTERNAL_ERROR_RESULT_JSON;
         }
 
         return json.toString();
     }
 
-    private static List<byte[]> fetchHostCertificates(String hostname) {
+    private static Endpoint parseEndpoint(String authority) {
+        if (authority == null || authority.trim().isEmpty()) {
+            return null;
+        }
+
         try {
-            URI uri = new URI("https", hostname, null, null);
+            URI uri = new URI("https://" + authority.trim() + "/");
+            String host = uri.getHost();
+            String normalizedAuthority = uri.getAuthority();
+            if (host == null || normalizedAuthority == null) {
+                return null;
+            }
+
+            return new Endpoint(normalizedAuthority, host);
+        } catch (Exception exception) {
+            return null;
+        }
+    }
+
+    private static List<byte[]> fetchHostCertificates(String authority) {
+        try {
+            URI uri = new URI("https://" + authority + "/");
             URL url = uri.toURL();
             HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
             connection.setConnectTimeout(FETCH_CERTIFICATES_TIMEOUT_MS);

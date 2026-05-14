@@ -65,8 +65,13 @@ namespace Approov.EditorTools
             }
 
             GUILayout.Space(8f);
-            requestedVersion = EditorGUILayout.TextField("Specific Version", requestedVersion ?? string.Empty);
-            ApproovIosSdkInstaller.RequestedVersion = requestedVersion;
+            EditorGUI.BeginChangeCheck();
+            string updatedRequestedVersion = EditorGUILayout.TextField("Specific Version", requestedVersion ?? string.Empty);
+            if (EditorGUI.EndChangeCheck())
+            {
+                requestedVersion = updatedRequestedVersion;
+                ApproovIosSdkInstaller.RequestedVersion = requestedVersion;
+            }
 
             GUILayout.Space(8f);
             if (GUILayout.Button("Install Latest Release"))

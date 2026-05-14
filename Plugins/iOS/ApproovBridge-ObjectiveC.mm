@@ -116,33 +116,41 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
 // but rather from the functions defined bellow
 NSMutableDictionary *globalCacheDictionary;
 
+static NSMutableDictionary *getGlobalCacheDictionary(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        globalCacheDictionary = [NSMutableDictionary dictionary];
+    });
+    return globalCacheDictionary;
+}
+
 
 // Function to initialize the global dictionary
 void initializeGlobalCacheDictionary() {
-    globalCacheDictionary = [NSMutableDictionary dictionary];
+    (void)getGlobalCacheDictionary();
 }
 
 // Function to add an object to the global dictionary
 void addToGlobalCache(NSString* key,NSData* value) {
-    @synchronized (globalCacheDictionary) {
-        [globalCacheDictionary setObject:value forKey:key];
+    NSMutableDictionary *cache = getGlobalCacheDictionary();
+    @synchronized (cache) {
+        [cache setObject:value forKey:key];
     }
 }
 
 // Function to retrieve an object from the global dictionary
 id retrieveFromGlobalCacheDictionary(NSString *key) {
-    @synchronized (globalCacheDictionary) {
-        if (globalCacheDictionary == nil) {
-            return nil;
-        }
-        return globalCacheDictionary[key];
+    NSMutableDictionary *cache = getGlobalCacheDictionary();
+    @synchronized (cache) {
+        return cache[key];
     }
 }
 
 // Function to remove an object from the global dictionary
 void removeFromGlobalCacheDictionary(NSString *key) {
-    @synchronized (globalCacheDictionary) {
-        [globalCacheDictionary removeObjectForKey:key];
+    NSMutableDictionary *cache = getGlobalCacheDictionary();
+    @synchronized (cache) {
+        [cache removeObjectForKey:key];
     }
 }
 
@@ -152,8 +160,9 @@ extern "C" {
 }
 // Function to empty the global dictionary
 void Approov_emptyGlobalCacheDictionary() {
-    @synchronized (globalCacheDictionary) {
-        [globalCacheDictionary removeAllObjects];
+    NSMutableDictionary *cache = getGlobalCacheDictionary();
+    @synchronized (cache) {
+        [cache removeAllObjects];
     }
 }
 
@@ -267,6 +276,7 @@ extern "C" {
 }
 
 bool Approov_initialize(const char *initialConfig, const char *updateConfig, const char *comment, NSError *__autoreleasing *error) {
+        initializeGlobalCacheDictionary();
         // Call the initialize method
         BOOL success = [Approov initialize:[NSString stringWithUTF8String:initialConfig] updateConfig:updateConfig ? [NSString stringWithUTF8String:updateConfig] : nil comment:comment ? [NSString stringWithUTF8String:comment] : nil error:error];
         return success;
@@ -363,11 +373,8 @@ extern "C" {
 }
 
 void Approov_setUserProperty(const char *property) {
-    if (property == NULL) {
-        return;
-    }
-    // Call the setUserProperty method
-    [Approov setUserProperty:[NSString stringWithUTF8String:property]];
+    NSString *propertyString = property == NULL ? nil : [NSString stringWithUTF8String:property];
+    [Approov setUserProperty:propertyString];
 }
 
 extern "C" {
@@ -375,24 +382,18 @@ extern "C" {
 }
 
 void Approov_setDevKey(const char *key) {
-    if (key == NULL) {
-        return;
-    }
-    // Call the setDevKey method
-    [Approov setDevKey:[NSString stringWithUTF8String:key]];
+    NSString *keyString = key == NULL ? nil : [NSString stringWithUTF8String:key];
+    [Approov setDevKey:keyString];
 }
 
 
 extern "C" {
-    void Approov_setDataHashInToken(char* data);
+    void Approov_setDataHashInToken(const char* data);
 }
 
-void Approov_setDataHashInToken(char* data) {
-    if (data == NULL) {
-        return;
-    }
-    // Call the setDataHashInToken method
-    [Approov setDataHashInToken:[NSString stringWithUTF8String:data]];
+void Approov_setDataHashInToken(const char* data) {
+    NSString *dataString = data == NULL ? nil : [NSString stringWithUTF8String:data];
+    [Approov setDataHashInToken:dataString];
 }
 
 // NOTE in objectiveC: typedef unsigned char Byte;
@@ -458,27 +459,59 @@ char* Approov_getDeviceID() {
     return aStringCopy;
 }
 
+static char* copyCStringFromNSString(NSString *value) {
+    if (value == nil) {
+        return NULL;
+    }
+
+    const char* resultCString = [value UTF8String];
+    if (resultCString == NULL) {
+        return NULL;
+    }
+
+    char* stringCopy = (char*)malloc(strlen(resultCString) + 1);
+    if (stringCopy == NULL) {
+        return NULL;
+    }
+
+    memcpy(stringCopy, resultCString, strlen(resultCString) + 1);
+    return stringCopy;
+}
 
 extern "C" {
     char* Approov_getMessageSignature(Byte* message, int messageLength);
+    char* Approov_getAccountMessageSignature(Byte* message, int messageLength);
+    char* Approov_getInstallMessageSignature(Byte* message, int messageLength);
 }
 
 char* Approov_getMessageSignature(Byte* message, int messageLength) {
+    return Approov_getAccountMessageSignature(message, messageLength);
+}
+
+char* Approov_getAccountMessageSignature(Byte* message, int messageLength) {
     if (message == NULL) {
         return NULL;
     }
     // Convert to NSString
     NSString *str = [[NSString alloc] initWithBytes:message length:messageLength encoding:NSUTF8StringEncoding];
-    // Call the getMessageSignature method
-    NSString *resultString = [Approov getMessageSignature:str];
-    const char* resultCString = [resultString UTF8String];
-    // Create a copy of the string to return
-    char* aStringCopy = (char*)malloc(strlen(resultCString) + 1);
-    if (aStringCopy == NULL) {
+    if (str == nil) {
         return NULL;
     }
-    memcpy(aStringCopy, resultCString, strlen(resultCString) + 1);
-    return aStringCopy;
+
+    return copyCStringFromNSString([Approov getAccountMessageSignature:str]);
+}
+
+char* Approov_getInstallMessageSignature(Byte* message, int messageLength) {
+    if (message == NULL) {
+        return NULL;
+    }
+
+    NSString *str = [[NSString alloc] initWithBytes:message length:messageLength encoding:NSUTF8StringEncoding];
+    if (str == nil) {
+        return NULL;
+    }
+
+    return copyCStringFromNSString([Approov getInstallMessageSignature:str]);
 }
 
 /* SPKI headers for each key type and size */
@@ -656,17 +689,30 @@ BOOL checkPinForHostIsSetInApproov(NSString* pHost, NSString* pKey, NSArray<NSSt
 *   @param hostname: the hostname to connect to
 *   @return a list of certificates in byte array format
 */
-NSArray<NSData *> *fetchCertificatesForHost(NSString* hostname) {
-    // Check if the hostname already contains "https://"
-    if (![hostname hasPrefix:@"https://"]) {
-        hostname = [@"https://" stringByAppendingString:hostname];
+NSString* hostFromAuthority(NSString* authority) {
+    if (authority == nil) {
+        return nil;
     }
-    
-    // Create a URL from the hostname
-    NSURL *url = [NSURL URLWithString:hostname];
+
+    NSURLComponents *components = [NSURLComponents componentsWithString:[@"https://" stringByAppendingString:authority]];
+    return components.host;
+}
+
+NSArray<NSData *> *fetchCertificatesForHost(NSString* authority) {
+    if (authority == nil) {
+        return nil;
+    }
+
+    NSString *urlString = [@"https://" stringByAppendingString:authority];
+    if (![urlString hasSuffix:@"/"]) {
+        urlString = [urlString stringByAppendingString:@"/"];
+    }
+
+    // Create a URL from the authority so non-default ports are preserved.
+    NSURL *url = [NSURL URLWithString:urlString];
     
     if (url == nil) {
-        NSLog(@"Invalid URL: %@", hostname);
+        NSLog(@"Invalid URL: %@", urlString);
         return nil;
     }
     
@@ -793,10 +839,21 @@ extern "C" {
 char* Approov_shouldProceedWithConnection(Byte* cert, int certLength, char* hostname, int hostnameLength,
                                                     char* pinType, int pinTypeLength) {
     if (hostname == NULL || pinType == NULL) {
-        return copyNSString(@"Hostname or pinning type can not be null");
+        return copyNSString(@"Authority or pinning type can not be null");
     }
     // Get the pinning information from the certificate
-    NSString* hostnameString = [[NSString alloc] initWithBytes:hostname length:hostnameLength encoding:NSUTF8StringEncoding];
+    NSString* authorityString = [[NSString alloc] initWithBytes:hostname length:hostnameLength encoding:NSUTF8StringEncoding];
+    if (authorityString == nil) {
+        return copyNSString(@"ApproovBridge: Authority is not valid UTF-8");
+    }
+
+    NSString* hostnameString = hostFromAuthority(authorityString);
+    if (hostnameString == nil) {
+        NSString* message = [@"ApproovBridge: Failed to parse authority " stringByAppendingString: authorityString];
+        NSLog(@"%@", message);
+        return copyNSString(message);
+    }
+
     NSString* pinningStringType = [[NSString alloc] initWithBytes:pinType length:pinTypeLength encoding:NSUTF8StringEncoding];
     NSData* certData = [NSData dataWithBytes:cert length:certLength];
     NSString* pinningString = getCertPinForPinType(certData, pinningStringType);
@@ -812,17 +869,17 @@ char* Approov_shouldProceedWithConnection(Byte* cert, int certLength, char* host
     }
 
     // The pinning info from leaf certificate is not in the Approov SDK, so we query the cache
-    NSData* cachedLeafCertData = retrieveFromGlobalCacheDictionary(hostnameString);
+    NSData* cachedLeafCertData = retrieveFromGlobalCacheDictionary(authorityString);
     if(cachedLeafCertData) {
         // Compare the leaf cert to current one
         if ([cachedLeafCertData isEqualToData:certData]) {
-            NSString* message = [@"ApproovBridge: Cached cert match, connection allowed for host " stringByAppendingString: hostnameString];
+            NSString* message = [@"ApproovBridge: Cached cert match, connection allowed for host " stringByAppendingString: authorityString];
             NSLog(@"%@", message);
             return copyNSString(SUCCESS);
         } else {
             /* The leaf certificate is NOT present in cache: We DELETE the cached entry for host */
             NSLog(@"%@", [NSString stringWithUTF8String:"ApproovBridge: Leaf certificate hash found in cache, but does not match the one fetched from host"]);
-            removeFromGlobalCacheDictionary(hostnameString);
+            removeFromGlobalCacheDictionary(authorityString);
         }
     }
 
@@ -830,26 +887,26 @@ char* Approov_shouldProceedWithConnection(Byte* cert, int certLength, char* host
     *   the leaf cert is not found in the cache, or the host is not pinned by Approov.
     *   We need to fetch the certificate chain and check the pins for the host
     */
-    NSArray<NSData *> *certificates = fetchCertificatesForHost(hostnameString);
+    NSArray<NSData *> *certificates = fetchCertificatesForHost(authorityString);
     if (certificates == nil) {
-        NSString* message = [@"ApproovBridge: Failed to get certificates for host " stringByAppendingString: hostnameString];
+        NSString* message = [@"ApproovBridge: Failed to get certificates for host " stringByAppendingString: authorityString];
         NSLog(@"%@", message);
         return copyNSString(message);
     } else if (certificates.count == 0) {
-        NSString* message = [@"ApproovBridge: Certificate chain verification failed for host: " stringByAppendingString: hostnameString];
+        NSString* message = [@"ApproovBridge: Certificate chain verification failed for host: " stringByAppendingString: authorityString];
         NSLog(@"%@", message);
         return copyNSString(message);
     }
     // We need to have a leaf cert and at least one intermediate/root cert because we have already checked the leaf.
     if ([certificates count] < 2) {
-        NSString* message = [@"ApproovBridge: Certificate chain too small for host " stringByAppendingString: hostnameString];
+        NSString* message = [@"ApproovBridge: Certificate chain too small for host " stringByAppendingString: authorityString];
         NSLog(@"%@", message);
         return copyNSString(message);
     }
     // Check if the leaf certificate obtained matches the input certificate
     NSData* leafCertData = certificates[0];
     if (![leafCertData isEqualToData:certData]) {
-        NSString* message = [@"ApproovBridge: Leaf certificate hash does not match the one fetched from host " stringByAppendingString: hostnameString];
+        NSString* message = [@"ApproovBridge: Leaf certificate hash does not match the one fetched from host " stringByAppendingString: authorityString];
         NSLog(@"%@", message);
         return copyNSString(message);
     }
@@ -860,7 +917,7 @@ char* Approov_shouldProceedWithConnection(Byte* cert, int certLength, char* host
         NSLog(@"ApproovBridge: New cert chain verified and cached, connection allowed for host %@", hostnameString);
         // Add the chain to cache
         //void addToGlobalCache(NSString* key,NSString* value)
-        addToGlobalCache(hostnameString, [certificates objectAtIndex:0]);
+        addToGlobalCache(authorityString, [certificates objectAtIndex:0]);
         return copyNSString(SUCCESS);
     }
     // We return the error message to C# land

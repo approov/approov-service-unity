@@ -5,6 +5,9 @@ using UnityEngine;
 
 namespace Approov
 {
+    /// <summary>
+    /// Normalized result returned by native token, secure-string, and custom JWT fetch operations.
+    /// </summary>
     [Serializable]
     public struct ApproovTokenFetchResult
     {
@@ -36,6 +39,9 @@ namespace Approov
         public string loggableToken;
     }
 
+    /// <summary>
+    /// Fetch status values returned by the native Approov SDK.
+    /// </summary>
     public enum ApproovTokenFetchStatus
     {
         Success,
@@ -85,6 +91,8 @@ namespace Approov
             byte[] measurementConfig = null;
             if (payload.measurementConfig != null)
             {
+                // JsonUtility does not deserialize directly into byte[] from JSON number arrays, so
+                // normalize through int[] first and then convert to the public byte[] contract.
                 measurementConfig = Array.ConvertAll(payload.measurementConfig, value => (byte)value);
             }
 
@@ -161,14 +169,15 @@ namespace Approov
                 5 => ApproovTokenFetchStatus.BadURL,
                 6 => ApproovTokenFetchStatus.UnknownURL,
                 7 => ApproovTokenFetchStatus.UnprotectedURL,
-                8 => ApproovTokenFetchStatus.NoNetworkPermission,
-                9 => ApproovTokenFetchStatus.MissingLibDependency,
-                10 => ApproovTokenFetchStatus.InternalError,
-                11 => ApproovTokenFetchStatus.Rejected,
-                12 => ApproovTokenFetchStatus.Disabled,
-                13 => ApproovTokenFetchStatus.UnknownKey,
-                14 => ApproovTokenFetchStatus.BadKey,
-                15 => ApproovTokenFetchStatus.BadPayload,
+                8 => ApproovTokenFetchStatus.NotInitialized,
+                9 => ApproovTokenFetchStatus.NoNetworkPermission,
+                10 => ApproovTokenFetchStatus.MissingLibDependency,
+                11 => ApproovTokenFetchStatus.InternalError,
+                12 => ApproovTokenFetchStatus.Rejected,
+                13 => ApproovTokenFetchStatus.Disabled,
+                14 => ApproovTokenFetchStatus.UnknownKey,
+                15 => ApproovTokenFetchStatus.BadKey,
+                16 => ApproovTokenFetchStatus.BadPayload,
                 _ => ApproovTokenFetchStatus.InternalError,
             };
         }
@@ -211,7 +220,10 @@ namespace Approov
         private static extern IntPtr Approov_getDeviceID();
 
         [DllImport("__Internal")]
-        private static extern IntPtr Approov_getMessageSignature(byte[] message, int messageLength);
+        private static extern IntPtr Approov_getAccountMessageSignature(byte[] message, int messageLength);
+
+        [DllImport("__Internal")]
+        private static extern IntPtr Approov_getInstallMessageSignature(byte[] message, int messageLength);
 
         [DllImport("__Internal")]
         private static extern void Approov_emptyGlobalCacheDictionary();
@@ -319,15 +331,26 @@ namespace Approov
             return StringFromNative(Approov_getDeviceID());
         }
 
-        public static string GetMessageSignature(string message)
+        public static string GetAccountMessageSignature(string message)
         {
-            if (string.IsNullOrEmpty(message))
+            if (message == null)
             {
                 return null;
             }
 
             byte[] messageBytes = Encoding.UTF8.GetBytes(message);
-            return StringFromNative(Approov_getMessageSignature(messageBytes, messageBytes.Length));
+            return StringFromNative(Approov_getAccountMessageSignature(messageBytes, messageBytes.Length));
+        }
+
+        public static string GetInstallMessageSignature(string message)
+        {
+            if (message == null)
+            {
+                return null;
+            }
+
+            byte[] messageBytes = Encoding.UTF8.GetBytes(message);
+            return StringFromNative(Approov_getInstallMessageSignature(messageBytes, messageBytes.Length));
         }
 
         public static void ClearCertificateCache()
@@ -344,19 +367,49 @@ namespace Approov
         }
 #elif UNITY_ANDROID
         private const string AndroidBridgeClassName = "io.approov.unity.service.ApproovUnityBridge";
+        private static readonly object BridgeClassLock = new();
         private static AndroidJavaClass sBridgeClass;
+
+        private static sbyte[] ToSignedBytes(byte[] bytes)
+        {
+            if (bytes == null)
+            {
+                return null;
+            }
+
+            // Unity's Android JNI bridge now expects signed byte arrays for Java byte[] marshaling.
+            sbyte[] signedBytes = new sbyte[bytes.Length];
+            Buffer.BlockCopy(bytes, 0, signedBytes, 0, bytes.Length);
+            return signedBytes;
+        }
+
+        private static byte[] ToUnsignedBytes(sbyte[] bytes)
+        {
+            if (bytes == null)
+            {
+                return null;
+            }
+
+            // Convert the Java byte[] result back into the public C# byte[] shape.
+            byte[] unsignedBytes = new byte[bytes.Length];
+            Buffer.BlockCopy(bytes, 0, unsignedBytes, 0, bytes.Length);
+            return unsignedBytes;
+        }
 
         private static AndroidJavaClass BridgeClass
         {
             get
             {
-                if (sBridgeClass == null)
+                AndroidJNI.AttachCurrentThread();
+                lock (BridgeClassLock)
                 {
-                    AndroidJNI.AttachCurrentThread();
-                    sBridgeClass = new AndroidJavaClass(AndroidBridgeClassName);
-                }
+                    if (sBridgeClass == null)
+                    {
+                        sBridgeClass = new AndroidJavaClass(AndroidBridgeClassName);
+                    }
 
-                return sBridgeClass;
+                    return sBridgeClass;
+                }
             }
         }
 
@@ -412,12 +465,18 @@ namespace Approov
 
         public static byte[] GetIntegrityMeasurementProof(byte[] nonce, byte[] measurementConfig)
         {
-            return BridgeClass.CallStatic<byte[]>("getIntegrityMeasurementProof", nonce, measurementConfig);
+            return ToUnsignedBytes(BridgeClass.CallStatic<sbyte[]>(
+                "getIntegrityMeasurementProof",
+                ToSignedBytes(nonce),
+                ToSignedBytes(measurementConfig)));
         }
 
         public static byte[] GetDeviceMeasurementProof(byte[] nonce, byte[] measurementConfig)
         {
-            return BridgeClass.CallStatic<byte[]>("getDeviceMeasurementProof", nonce, measurementConfig);
+            return ToUnsignedBytes(BridgeClass.CallStatic<sbyte[]>(
+                "getDeviceMeasurementProof",
+                ToSignedBytes(nonce),
+                ToSignedBytes(measurementConfig)));
         }
 
         public static string GetDeviceID()
@@ -425,9 +484,14 @@ namespace Approov
             return BridgeClass.CallStatic<string>("getDeviceID");
         }
 
-        public static string GetMessageSignature(string message)
+        public static string GetAccountMessageSignature(string message)
         {
-            return BridgeClass.CallStatic<string>("getMessageSignature", message);
+            return BridgeClass.CallStatic<string>("getAccountMessageSignature", message);
+        }
+
+        public static string GetInstallMessageSignature(string message)
+        {
+            return BridgeClass.CallStatic<string>("getInstallMessageSignature", message);
         }
 
         public static void ClearCertificateCache()
@@ -437,7 +501,7 @@ namespace Approov
 
         public static string ShouldProceedWithNetworkConnection(byte[] cert, string domain, string pinType)
         {
-            string result = BridgeClass.CallStatic<string>("shouldProceedWithConnection", cert, domain, pinType);
+            string result = BridgeClass.CallStatic<string>("shouldProceedWithConnection", ToSignedBytes(cert), domain, pinType);
             return result == SUCCESS ? null : result;
         }
 #else
@@ -462,7 +526,8 @@ namespace Approov
         public static byte[] GetIntegrityMeasurementProof(byte[] nonce, byte[] measurementConfig) => null;
         public static byte[] GetDeviceMeasurementProof(byte[] nonce, byte[] measurementConfig) => null;
         public static string GetDeviceID() => null;
-        public static string GetMessageSignature(string message) => null;
+        public static string GetAccountMessageSignature(string message) => null;
+        public static string GetInstallMessageSignature(string message) => null;
         public static void ClearCertificateCache() {}
         public static string ShouldProceedWithNetworkConnection(byte[] cert, string url, string pinType) => null;
 #endif

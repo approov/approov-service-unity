@@ -1,0 +1,21 @@
+{
+  "name": "Approov.Unity.Runtime.Tests",
+  "rootNamespace": "Approov.Tests",
+  "references": [
+    "Approov.Unity.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}
